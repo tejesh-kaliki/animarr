@@ -1,0 +1,38 @@
+services:
+  animarr:
+    build: .
+    image: animarr:local
+    container_name: animarr
+    restart: unless-stopped
+    # Shares the vpn container network namespace, same as Sonarr and qBittorrent.
+    # Do not publish ports here: Docker ignores them under network_mode: container.
+    # 8990 is reachable inside that namespace. To publish it on the host, add
+    # `8990:8990` to the vpn service (not applied in this repo). Caddy needs an
+    # `animarr` alias on vpn's homelab_proxy network (also not applied).
+    network_mode: container:vpn
+    labels:
+      homelab.stack: media
+      homelab.role: anime-tracker
+    environment:
+      TZ: Asia/Kolkata
+      LISTEN_ADDR: ":8990"
+      DATA_PATH: /config
+      LIBRARY_DIR: /data/media/anime
+      DOWNLOADS_DIR: /data/downloads
+      ANILIST_USERNAME: ${ANILIST_USERNAME:-}
+      ANILIST_TOKEN: ${ANILIST_TOKEN:-}
+      AUTOMATION_ENABLED: ${AUTOMATION_ENABLED:-false}
+      ANIMARR_SECRET_KEY: ${ANIMARR_SECRET_KEY:-}
+      NYAA_CATEGORY: ${NYAA_CATEGORY:-1_2}
+      NYAA_URLS: ${NYAA_URLS:-https://nyaa.si}
+      QB_URL: http://127.0.0.1:8080
+      QB_USERNAME: ${QB_USERNAME:-}
+      QB_PASSWORD: ${QB_PASSWORD:-}
+      QB_CATEGORY: animarr
+      JELLYFIN_URL: ${JELLYFIN_URL:-http://jellyfin:8096}
+      JELLYFIN_API_KEY: ${JELLYFIN_API_KEY:-}
+      SONARR_URL: ${SONARR_URL:-http://127.0.0.1:8989}
+      SONARR_API_KEY: ${SONARR_API_KEY:-}
+    volumes:
+      - ./config:/config
+      - ${DATA_DIR:-./data}:/data

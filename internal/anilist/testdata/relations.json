@@ -1,0 +1,43 @@
+{
+  "data": {
+    "Media": {
+      "id": 108268,
+      "title": {"romaji": "Honzuki no Gekokujou", "english": "Ascendance of a Bookworm"},
+      "format": "TV",
+      "status": "FINISHED",
+      "episodes": 14,
+      "description": "A girl and books",
+      "genres": ["Fantasy"],
+      "studios": {"nodes": [{"name": "Ajia-do"}]},
+      "startDate": {"year": 2019, "month": 10, "day": 3},
+      "relations": {
+        "edges": [
+          {
+            "relationType": "SEQUEL",
+            "node": {
+              "id": 111000,
+              "type": "ANIME",
+              "format": "TV",
+              "status": "FINISHED",
+              "episodes": 12,
+              "title": {"romaji": "Honzuki 2", "english": "Ascendance of a Bookworm Part 2"},
+              "startDate": {"year": 2020, "month": 4, "day": 5}
+            }
+          },
+          {
+            "relationType": "PREQUEL",
+            "node": {
+              "id": 9,
+              "type": "ANIME",
+              "format": "OVA",
+              "status": "FINISHED",
+              "episodes": 1,
+              "title": {"english": "OVA"},
+              "startDate": {"year": 2020, "month": 1, "day": 1}
+            }
+          }
+        ]
+      }
+    }
+  }
+}

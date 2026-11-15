@@ -1,0 +1,9 @@
+{
+  "Sonarr Series Title": 154587,
+  "Ascendance of a Bookworm": {
+    "entries": [
+      {"anilist": 108268, "sonarrSeason": 1, "episodeOffset": 0},
+      {"anilist": 111000, "sonarrSeason": 1, "episodeOffset": 14}
+    ]
+  }
+}

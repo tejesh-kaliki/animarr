@@ -1,0 +1,54 @@
+{
+  "data": {
+    "MediaListCollection": {
+      "lists": [
+        {
+          "status": "CURRENT",
+          "entries": [
+            {
+              "status": "CURRENT",
+              "media": {
+                "id": 154587,
+                "title": {"romaji": "Sousou no Frieren", "english": "Frieren: Beyond Journey's End", "native": "葬送のフリーレン"},
+                "synonyms": ["Frieren"],
+                "format": "TV",
+                "status": "FINISHED",
+                "episodes": 28,
+                "nextAiringEpisode": null,
+                "airingSchedule": {"nodes": [{"episode": 1, "airingAt": 1695945600}]},
+                "coverImage": {"extraLarge": "https://example.test/frieren.jpg", "large": "https://example.test/frieren-l.jpg", "medium": ""},
+                "season": "FALL",
+                "seasonYear": 2023,
+                "startDate": {"year": 2023, "month": 9, "day": 29},
+                "relations": {"edges": [{"relationType": "SEQUEL", "node": {"id": 170942, "type": "ANIME", "format": "TV", "title": {"romaji": "Sousou no Frieren 2", "english": null}}}]}
+              }
+            }
+          ]
+        },
+        {
+          "status": "PLANNING",
+          "entries": [
+            {
+              "status": "PLANNING",
+              "media": {
+                "id": 199,
+                "title": {"romaji": "Sen to Chihiro no Kamikakushi", "english": "Spirited Away", "native": "千と千尋の神隠し"},
+                "synonyms": [],
+                "format": "MOVIE",
+                "status": "FINISHED",
+                "episodes": 1,
+                "nextAiringEpisode": null,
+                "airingSchedule": {"nodes": []},
+                "coverImage": {"extraLarge": "", "large": "https://example.test/chihiro.jpg", "medium": ""},
+                "season": "SUMMER",
+                "seasonYear": 2001,
+                "startDate": {"year": 2001, "month": 7, "day": 20},
+                "relations": {"edges": []}
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

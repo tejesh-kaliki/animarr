@@ -1,0 +1,504 @@
+{{define "page"}}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} · animarr</title>
+<link rel="icon" href="/favicon.ico">
+<link rel="stylesheet" href="/static/app.css">
+<script src="/static/htmx.min.js" defer></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="topbar">
+  <a class="brand" href="/">ani<span>marr</span></a>
+  <nav aria-label="Main">
+    <a href="/" {{if eq .Nav "home"}}class="active" aria-current="page"{{end}}>Dashboard</a>
+    <a href="/shows" {{if eq .Nav "shows"}}class="active" aria-current="page"{{end}}>Shows</a>
+    <a href="/search" {{if eq .Nav "search"}}class="active" aria-current="page"{{end}}>Search</a>
+    <a href="/activity" {{if eq .Nav "activity"}}class="active" aria-current="page"{{end}}>Activity</a>
+    <a href="/settings" {{if eq .Nav "settings"}}class="active" aria-current="page"{{end}}>Settings</a>
+  </nav>
+</header>
+<main id="main" class="wrap">
+{{if .AutomationOff}}<p class="banner"><strong>Automation is off.</strong> Nothing is searched or downloaded. {{if eq .Nav "settings"}}<a href="#g-automation">Turn it on below</a>{{else}}<a href="/settings">Turn on in Settings</a>{{end}}</p>{{end}}
+{{if and .Error (ne .Body "settings")}}<p class="error">{{template "ico" "triangle-fill"}}{{.Error}}</p>{{end}}
+{{if .Flash}}<p class="flash">{{template "ico" "check"}}{{.Flash}}</p>{{end}}
+{{if eq .Body "dashboard"}}{{template "dashboard" .}}{{end}}
+{{if eq .Body "shows"}}{{template "shows" .}}{{end}}
+{{if eq .Body "show"}}{{template "show" .}}{{end}}
+{{if eq .Body "search"}}{{template "search" .}}{{end}}
+{{if eq .Body "activity"}}{{template "activity" .}}{{end}}
+{{if eq .Body "settings"}}{{template "settings" .}}{{end}}
+</main>
+<script>
+document.querySelector("nav [aria-current]")?.scrollIntoView({inline: "nearest", block: "nearest"});
+document.body.addEventListener("htmx:beforeRequest", function (e) {
+  if (e.detail && e.detail.elt) e.detail.elt.setAttribute("aria-busy", "true");
+});
+document.body.addEventListener("htmx:afterRequest", function (e) {
+  if (e.detail && e.detail.elt) e.detail.elt.removeAttribute("aria-busy");
+});
+(function () {
+  var form = document.getElementById("settings-form");
+  if (!form) return;
+  var note = form.querySelector(".dirty-note");
+  function mark() {
+    form.dataset.dirty = "1";
+    if (note) note.hidden = false;
+  }
+  form.addEventListener("input", mark);
+  form.addEventListener("change", mark);
+  window.addEventListener("beforeunload", function (e) {
+    if (form.dataset.dirty) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+  });
+  form.addEventListener("submit", function (e) {
+    var b = e.submitter;
+    if (!b) return;
+    if (b.name === "reset") {
+      if (form.dataset.dirty && !confirm("Reverting discards your other unsaved edits. Continue?")) {
+        e.preventDefault();
+        return;
+      }
+      form.dataset.dirty = "";
+      return;
+    }
+    if (b.name === "save") {
+      form.dataset.dirty = "";
+      if (note) note.hidden = true;
+      b.disabled = true;
+      b.textContent = "Saving…";
+    }
+  });
+})();
+</script>
+</body>
+</html>
+{{end}}
+
+{{define "ico"}}<svg class="i" aria-hidden="true"><use href="/static/icons.svg#{{.}}"/></svg>{{end}}
+
+{{define "dashboard"}}
+<div class="pagehead">
+  <h1>Dashboard</h1>
+  <div class="pagehead-actions">
+    <form method="post" action="/sync" onsubmit="var b=this.querySelector('button'); if (b) { b.disabled = true; b.textContent = 'Syncing…'; }">
+      <button class="btn" type="submit">Sync AniList</button>
+    </form>
+    {{if not .SyncedAt.IsZero}}<span class="muted">Synced {{clock .SyncedAt}}</span>{{end}}
+  </div>
+</div>
+<div class="stats">
+  <a class="stat" href="/shows?filter=monitored"><strong>{{.Dash.Wanted}}</strong><span>Missing</span></a>
+  <a class="stat" href="#active"><strong>{{len .Dash.Active}}</strong><span>Downloading</span></a>
+  <a class="stat {{if gt .ProblemCount 0}}bad{{else}}quiet{{end}}" href="/activity?level=problems"><strong>{{.ProblemCount}}</strong><span>Problems (24h)</span></a>
+  <a class="stat" href="/shows"><strong>{{.Dash.Shows}}</strong><span>Shows</span></a>
+</div>
+<div class="cols">
+  <section aria-labelledby="airing-h">
+    <h2 id="airing-h">Airing soon</h2>
+    {{if not .AirGroups}}<p class="empty">Nothing scheduled this week. <a href="/shows">Browse shows →</a></p>{{end}}
+    {{if .AirGroups}}
+    <ul class="list air">
+      {{range .AirGroups}}
+      <li class="day">{{.Label}}</li>
+      {{range .Items}}
+      <li>
+        <span class="when muted"><time datetime="{{rfc .At}}">{{.Clock}}</time></span>
+        <a class="what" href="/shows/{{.ShowID}}">{{.Title}}</a>
+        <span class="tag badge upcoming">E{{printf "%02d" .Episode}}</span>
+      </li>
+      {{end}}
+      {{end}}
+    </ul>
+    {{end}}
+  </section>
+  <div class="side">
+    {{if .Problems}}
+    <section aria-labelledby="problems-h">
+      <h2 id="problems-h">Problems</h2>
+      <ul class="list problems">
+        {{range .Problems}}
+        <li>
+          <span class="when badge {{.Level}}">{{template "ico" (icon .Level)}}{{.Level}}</span>
+          <span class="what msg">{{if .ShowID}}<a href="/shows/{{.ShowID}}">{{.ShowTitle}}</a> · {{end}}{{.Summary}}</span>
+        </li>
+        {{end}}
+      </ul>
+      <p class="more"><a href="/activity?level=problems">All activity →</a></p>
+    </section>
+    {{end}}
+    <section id="active" aria-labelledby="active-h" hx-get="/" hx-select="#active" hx-target="this" hx-swap="outerHTML"{{if .Dash.Active}} hx-trigger="every 10s [document.visibilityState=='visible']"{{end}}>
+      <h2 id="active-h">Active downloads</h2>
+      {{if not .Dash.Active}}<p class="empty">No active downloads.</p>{{end}}
+      {{if .Dash.Active}}
+      <ul class="list air">
+        {{range .Dash.Active}}
+        <li>
+          <span class="when badge downloading">{{if gt .Progress 0}}{{.Progress}}%{{else}}Queued{{end}}</span>
+          <div class="what">
+            <a href="/shows/{{.ShowID}}">{{.ShowTitle}}</a>
+            {{if gt .Progress 0}}
+            <div class="dl-bar" role="progressbar" aria-valuenow="{{.Progress}}" aria-valuemin="0" aria-valuemax="100"><span style="width: {{.Progress}}%"></span></div>
+            {{end}}
+          </div>
+          <span class="tag muted">E{{printf "%02d" .Episode}}</span>
+        </li>
+        {{end}}
+      </ul>
+      {{end}}
+    </section>
+    <section aria-labelledby="imports-h">
+      <h2 id="imports-h">Recent imports</h2>
+      {{if not .Dash.Recent}}<p class="empty">No imports yet.</p>{{end}}
+      {{if .Dash.Recent}}
+      <ul class="list air">
+        {{range .Dash.Recent}}
+        <li>
+          <span class="when badge downloaded">imported</span>
+          <a class="what" href="/shows/{{.ShowID}}">{{.ShowTitle}}</a>
+          <span class="tag muted">E{{printf "%02d" .Episode}}</span>
+        </li>
+        {{end}}
+      </ul>
+      {{end}}
+    </section>
+  </div>
+</div>
+{{end}}
+
+{{define "shows"}}
+<h1>Shows</h1>
+<div class="filters">
+  <a href="/shows?filter=all{{if and (ne .Sort "") (ne .Sort "next")}}&amp;sort={{.Sort}}{{end}}" class="{{if or (eq .Filter "all") (eq .Filter "")}}on{{end}}">All</a>
+  <a href="/shows?filter=monitored{{if and (ne .Sort "") (ne .Sort "next")}}&amp;sort={{.Sort}}{{end}}" class="{{if eq .Filter "monitored"}}on{{end}}">Monitored</a>
+  <a href="/shows?filter=airing{{if and (ne .Sort "") (ne .Sort "next")}}&amp;sort={{.Sort}}{{end}}" class="{{if eq .Filter "airing"}}on{{end}}">Airing</a>
+  <form class="sort" method="get" action="/shows">
+    {{if and (ne .Filter "") (ne .Filter "all")}}<input type="hidden" name="filter" value="{{.Filter}}">{{end}}
+    <label for="sort" class="sr-only">Sort</label>
+    <select id="sort" name="sort" onchange="if (this.form.requestSubmit) this.form.requestSubmit(); else this.form.submit();">
+      <option value="next" {{if or (eq .Sort "next") (eq .Sort "")}}selected{{end}}>Next airing</option>
+      <option value="title" {{if eq .Sort "title"}}selected{{end}}>Title</option>
+      <option value="added" {{if eq .Sort "added"}}selected{{end}}>Recently added</option>
+    </select>
+    <button class="btn" type="submit">Sort</button>
+  </form>
+</div>
+{{if not .Cards}}<p class="empty">No shows in this filter. Sync AniList or add one from Search.</p>{{end}}
+{{range .Groups}}
+<section class="franchise">
+  <h2>{{.Title}} <span class="muted">{{len .Cards}} entries · {{.Downloaded}}/{{.TotalEps}} episodes</span></h2>
+  <div class="grid">
+{{range .Cards}}
+  <article class="card">
+    <a class="poster" href="/shows/{{.ID}}" tabindex="-1" aria-hidden="true">
+      {{if .CoverImage}}<img src="{{.CoverImage}}" alt="">{{else}}<span class="ph">{{letter (.DisplayTitle)}}</span>{{end}}
+      <span class="progress">{{.Downloaded}}/{{.TotalEps}}</span>
+      {{if gt .Missing 0}}<span class="newflag">{{.Missing}} missing</span>{{end}}
+    </a>
+    {{if gt .ProgressPct 0}}<div class="bar"><span style="width: {{.ProgressPct}}%"></span></div>{{end}}
+    <div class="meta">
+      <a href="/shows/{{.ID}}" title="{{.DisplayTitle}}">{{.DisplayTitle}}</a>
+      <p class="muted">{{.NextLine}}</p>
+    </div>
+  </article>
+{{end}}
+  </div>
+</section>
+{{end}}
+{{if .Singles}}
+{{if .Groups}}<h2 class="franchise-other">Other shows</h2>{{end}}
+<div class="grid">
+{{range .Singles}}
+  <article class="card">
+    <a class="poster" href="/shows/{{.ID}}" tabindex="-1" aria-hidden="true">
+      {{if .CoverImage}}<img src="{{.CoverImage}}" alt="">{{else}}<span class="ph">{{letter (.DisplayTitle)}}</span>{{end}}
+      <span class="progress">{{.Downloaded}}/{{.TotalEps}}</span>
+      {{if gt .Missing 0}}<span class="newflag">{{.Missing}} missing</span>{{end}}
+    </a>
+    {{if gt .ProgressPct 0}}<div class="bar"><span style="width: {{.ProgressPct}}%"></span></div>{{end}}
+    <div class="meta">
+      <a href="/shows/{{.ID}}" title="{{.DisplayTitle}}">{{.DisplayTitle}}</a>
+      <p class="muted">{{.NextLine}}</p>
+    </div>
+  </article>
+{{end}}
+</div>
+{{end}}
+{{end}}
+
+{{define "show"}}
+<div class="showhead">
+  {{if .Show.CoverImage}}<img src="{{.Show.CoverImage}}" alt="">{{else}}<span class="ph">{{letter (.Show.DisplayTitle)}}</span>{{end}}
+  <div>
+    <h1>{{.Show.DisplayTitle}}</h1>
+    <p class="muted">{{humanFormat .Show.Format}}{{if .Show.Status}} · {{human .Show.Status}}{{end}}{{if .AirClock}} · {{.AirClock}}{{end}}</p>
+    <p class="chips">
+      <span class="chip">{{.Show.Downloaded}} / {{.Show.TotalEps}} downloaded</span>
+      {{if .Show.ListStatus}}<span class="chip">AniList: {{human .Show.ListStatus}}</span>{{end}}
+      {{if .Show.Monitored}}<span class="chip ok">Monitored</span>{{else}}<span class="chip">Not monitored</span>{{end}}
+    </p>
+    <div class="toolbar">
+      <form method="post" action="/shows/{{.Show.ID}}/monitored">
+        {{if .Show.Monitored}}
+        <input type="hidden" name="monitored" value="0">
+        <button class="btn" type="submit">Unmonitor</button>
+        {{else}}
+        <input type="hidden" name="monitored" value="1">
+        <button class="btn primary" type="submit">Monitor</button>
+        {{end}}
+      </form>
+      <form method="post" action="/shows/{{.Show.ID}}/resolution">
+        <label for="res">Quality</label>
+        <select id="res" class="field" name="resolution">
+          <option value="" {{if eq .Show.PreferredResolution ""}}selected{{end}}>Default ({{.Preferred}})</option>
+          <option value="480p" {{if eq .Show.PreferredResolution "480p"}}selected{{end}}>480p</option>
+          <option value="720p" {{if eq .Show.PreferredResolution "720p"}}selected{{end}}>720p</option>
+          <option value="1080p" {{if eq .Show.PreferredResolution "1080p"}}selected{{end}}>1080p</option>
+          <option value="2160p" {{if eq .Show.PreferredResolution "2160p"}}selected{{end}}>2160p</option>
+        </select>
+        <button class="btn" type="submit">Apply</button>
+      </form>
+    </div>
+  </div>
+</div>
+<h2>Episodes</h2>
+{{if not .Rows}}
+{{if eq .Show.Status "NOT_YET_RELEASED"}}
+<p class="empty">This show hasn't aired yet. Episodes appear after AniList lists them and the next sync runs.</p>
+{{else}}
+<p class="empty">No episodes yet. AniList hasn't listed any{{if .Show.Status}} for this {{human .Show.Status}} show{{end}}. They'll appear after the next sync.</p>
+{{end}}
+{{else}}
+<p class="muted">{{.EpSummary}}{{if .JumpEp}} · <a class="jump" href="#ep-{{.JumpEp}}">Jump to next (E{{printf "%02d" .JumpEp}})</a>{{end}}</p>
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>#</th><th>Air</th><th>State</th><th></th></tr>
+  </thead>
+  <tbody>
+    {{range .Rows}}{{template "episode-row" .}}{{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+{{end}}
+
+{{define "episode-row"}}
+<tr id="ep-{{.Episode.Number}}"{{if or (eq .Episode.State "ignored") .Next}} class="{{if eq .Episode.State "ignored"}}ignored{{end}}{{if .Next}} next{{end}}"{{end}}>
+  <td class="num">E{{printf "%02d" .Episode.Number}}</td>
+  <td class="date muted">{{ptime .Episode.AirDate}}</td>
+  <td class="state">
+    <span class="badge {{.Episode.State}}">{{template "ico" (icon .Episode.State)}}{{.Episode.State}}{{if and (eq .Episode.State "downloading") .HasProgress}} {{.Progress}}%{{end}}</span>
+    {{if .Episode.ReleaseTitle}}<div class="release muted">{{.Episode.ReleaseTitle}}</div>{{end}}
+    {{if .Episode.FilePath}}<div class="path" title="{{.Episode.FilePath}}">{{.Episode.FilePath}}</div>{{end}}
+    {{if .Flash}}<div class="rowflash">{{.Flash}}</div>{{end}}
+  </td>
+  <td class="actions">
+    <div class="row-actions">
+      {{if and (ne .Episode.State "ignored") (ne .Episode.State "upcoming")}}
+      <form method="post" action="/shows/{{.Show.ID}}/episodes/{{.Episode.Number}}/search" hx-post="/shows/{{.Show.ID}}/episodes/{{.Episode.Number}}/search" hx-target="#ep-{{.Episode.Number}}" hx-swap="outerHTML settle:40ms" hx-disabled-elt="find button">
+        <button type="submit">Search</button>
+      </form>
+      {{end}}
+      {{if eq .Episode.State "ignored"}}
+      <form method="post" action="/shows/{{.Show.ID}}/episodes/{{.Episode.Number}}/unignore" hx-post="/shows/{{.Show.ID}}/episodes/{{.Episode.Number}}/unignore" hx-target="#ep-{{.Episode.Number}}" hx-swap="outerHTML settle:40ms" hx-disabled-elt="find button">
+        <button type="submit">Unignore</button>
+      </form>
+      {{else}}
+      <form method="post" action="/shows/{{.Show.ID}}/episodes/{{.Episode.Number}}/ignore" hx-post="/shows/{{.Show.ID}}/episodes/{{.Episode.Number}}/ignore" hx-target="#ep-{{.Episode.Number}}" hx-swap="outerHTML settle:40ms" hx-disabled-elt="find button">
+        <button type="submit">Ignore</button>
+      </form>
+      {{end}}
+      {{if or (eq .Episode.State "downloaded") (eq .Episode.State "downloading")}}
+      <form method="post" action="/shows/{{.Show.ID}}/episodes/{{.Episode.Number}}/redownload" hx-post="/shows/{{.Show.ID}}/episodes/{{.Episode.Number}}/redownload" hx-target="#ep-{{.Episode.Number}}" hx-swap="outerHTML settle:40ms" hx-disabled-elt="find button">
+        <button type="submit">Re-download</button>
+      </form>
+      {{end}}
+    </div>
+  </td>
+</tr>
+{{end}}
+
+{{define "search"}}
+<h1>Search</h1>
+<p class="lede">Add any AniList anime. Movies become a single episode. New adds are monitored.</p>
+<form class="search" method="get" action="/search">
+  <label for="q" class="sr-only">Search AniList</label>
+  <input id="q" type="search" name="q" value="{{.Query}}" placeholder="Search AniList by title" autofocus minlength="2" required>
+  <button class="btn primary" type="submit">Search</button>
+</form>
+{{if not .Query}}<p class="empty">Search by English or romaji title. Results come from AniList; adding a show monitors it.</p>{{end}}
+{{range .Results}}
+<div class="result">
+  {{if .CoverURL}}<img src="{{.CoverURL}}" alt="">{{else}}<span class="ph">{{letter (.DisplayTitle)}}</span>{{end}}
+  <div>
+    <strong>{{.DisplayTitle}}</strong>
+    <div class="muted">{{humanFormat .Format}}{{if .Status}} · {{human .Status}}{{end}}{{if .StartYear}} · {{.StartYear}}{{end}} · <a href="https://anilist.co/anime/{{.ID}}" target="_blank" rel="noopener">AniList ↗</a></div>
+  </div>
+  {{$id := index $.Library .ID}}
+  {{if $id}}
+  <a class="btn" href="/shows/{{$id}}">In library</a>
+  <form method="post" action="/shows/add">
+    <input type="hidden" name="anilist_id" value="{{.ID}}">
+    <button class="btn" type="submit" name="all_seasons" value="1" title="Add any missing connected TV seasons (sequels and prequels)">Add all seasons</button>
+  </form>
+  {{else}}
+  <form method="post" action="/shows/add">
+    <input type="hidden" name="anilist_id" value="{{.ID}}">
+    <button class="btn primary" type="submit">Add</button>
+    <button class="btn" type="submit" name="all_seasons" value="1" title="Also add every connected TV season (sequels and prequels)">Add all seasons</button>
+  </form>
+  {{end}}
+</div>
+{{else}}
+{{if .Query}}<p class="empty">No matches.</p>{{end}}
+{{end}}
+{{end}}
+
+{{define "activity"}}
+<h1>Activity</h1>
+<div class="filters">
+  <a href="/activity" class="{{if or (eq .Level "") (eq .Level "all")}}on{{end}}">All</a>
+  <a href="/activity?level=problems" class="{{if eq .Level "problems"}}on{{end}}">Problems</a>
+  <a href="/activity?level=grabs" class="{{if eq .Level "grabs"}}on{{end}}">Grabs</a>
+  <a href="/activity?level=syncs" class="{{if eq .Level "syncs"}}on{{end}}">Syncs</a>
+</div>
+{{if not .Events}}<p class="empty">{{if or (eq .Level "") (eq .Level "all")}}No history yet.{{else}}Nothing in this filter.{{end}}</p>{{end}}
+{{if .Events}}
+<ul class="list activity">
+{{range .Events}}
+<li>
+  <span class="tag badge {{.Level}}">{{template "ico" (icon .Level)}}{{.Level}}</span>
+  <span class="when muted"><time datetime="{{rfc .At}}">{{time .At}}</time></span>
+  <div class="what">
+    <span class="msg">{{if .ShowID}}<a href="/shows/{{.ShowID}}">{{.ShowTitle}}{{if .HasEpisode}} E{{printf "%02d" .Episode}}{{end}}</a> · {{end}}{{.Summary}}</span>
+    {{if .Detail}}<details class="detail"><summary>Details</summary><pre>{{.Detail}}</pre></details>{{end}}
+  </div>
+</li>
+{{end}}
+</ul>
+{{end}}
+{{end}}
+
+{{define "settings"}}
+<h1>Settings</h1>
+<div class="settings-layout">
+  <nav class="filters settings-nav" aria-label="Settings sections">
+    {{range .Settings.Groups}}
+    <a href="#g-{{lower .Name}}">{{if eq .Name "Sonarr"}}Sonarr migration{{else}}{{.Name}}{{end}}</a>
+    {{end}}
+    <a href="#g-startup">Startup</a>
+  </nav>
+  <div class="settings-jump">
+    <label for="settings-jump" class="sr-only">Jump to section</label>
+    <select id="settings-jump" class="w-select" aria-label="Jump to section" onchange="if (this.value) location.hash = this.value">
+      <option value="">Jump to section</option>
+      {{range .Settings.Groups}}
+      <option value="#g-{{lower .Name}}">{{if eq .Name "Sonarr"}}Sonarr migration{{else}}{{.Name}}{{end}}</option>
+      {{end}}
+      <option value="#g-startup">Startup</option>
+    </select>
+  </div>
+  <div class="settings-main">
+    <p class="lede">A saved value overrides the environment variable. The environment overrides CONFIG_FILE, then the built-in default. Changes apply on the next sync, RSS poll, or download poll. There is no login. Keep this page behind your VPN or Caddy. Saving checks that the request came from this site.</p>
+    {{if .CopyFallback}}<p class="note">The last import copied the file into the library instead of hardlinking it. The download stays in qBittorrent for seeding, so that episode uses twice the disk space. This is what happens on exFAT and other filesystems that do not support hardlinks.</p>{{end}}
+    {{if and .Error (not .TestName)}}<p class="error">{{template "ico" "triangle-fill"}}{{.Error}}</p>{{end}}
+    {{range .Settings.Problems}}<p class="error">{{template "ico" "triangle-fill"}}{{.}}</p>{{end}}
+    <form id="settings-form" method="post" action="/settings">
+      <input type="hidden" name="csrf" value="{{.CSRF}}">
+      {{range .Settings.Groups}}{{if eq .Name "Automation"}}{{range .Fields}}
+      <div class="automation-card{{if eq .Value "true"}} on{{end}}" id="g-automation">
+        <div>
+          <div class="auto-title">Automation</div>
+          <p class="muted">{{.Help}}</p>
+          <span class="src src-{{.Source}}" title="{{srcTitle .Source}}">{{.Source}}</span>
+        </div>
+        <div class="auto-switch">
+          <span class="switch-word" id="auto-state">{{if eq .Value "true"}}On{{else}}Off{{end}}</span>
+          {{/* Checkbox precedes the hidden off value because Go's form parser keeps the first value. */}}
+          <label class="switch">
+            <input type="checkbox" role="switch" name="{{.Key}}" value="true" aria-label="Automation" {{if eq .Value "true"}}checked{{end}} onchange="var w=document.getElementById('auto-state'); if (w) w.textContent=this.checked?'On':'Off'">
+            <input type="hidden" name="{{.Key}}" value="false">
+          </label>
+        </div>
+      </div>
+      {{end}}{{end}}{{end}}
+      {{range .Settings.Groups}}{{if ne .Name "Automation"}}
+      {{if eq .Name "Sonarr"}}
+      <details class="settings-group" id="g-sonarr">
+        <summary>Sonarr migration</summary>
+        {{range .Fields}}{{template "settings-field" .}}{{end}}
+      </details>
+      {{else}}
+      <section class="settings-group" id="g-{{lower .Name}}">
+        <div class="group-head">
+          <h2 id="g-{{lower .Name}}-title">{{.Name}}</h2>
+          {{if .Test}}
+          <button class="btn" type="submit" formaction="/settings/test/{{.Test}}" hx-post="/settings/test/{{.Test}}" hx-include="#settings-form" hx-target="#test-{{.Test}}" hx-swap="innerHTML" hx-disabled-elt="this">Test connection</button>
+          {{end}}
+        </div>
+        {{if .Test}}<div id="test-{{.Test}}" class="test-out" role="status" aria-live="polite">{{if eq $.TestName .Test}}{{template "test-out" $}}{{end}}</div>{{end}}
+        {{range .Fields}}{{template "settings-field" .}}{{end}}
+      </section>
+      {{end}}
+      {{end}}{{end}}
+      <div class="savebar">
+        <span class="dirty-note" hidden>Unsaved changes</span>
+        <button class="btn primary" type="submit" name="save" value="1">Save changes</button>
+      </div>
+    </form>
+    <section class="settings-group" id="g-startup">
+      <h2>Startup (read-only)</h2>
+      <p class="muted">Listen address, data path, log level, and the secret key are read at startup. Change them in the environment and restart.</p>
+      <dl class="settings">
+        <dt>Listen</dt><dd>{{.Settings.ListenAddr}}</dd>
+        <dt>Data path</dt><dd>{{.Settings.DataPath}}</dd>
+        <dt>Log level</dt><dd>{{or .Settings.LogLevel "info"}}</dd>
+        <dt>Secret key</dt><dd>{{.Settings.KeySource}}{{if .Settings.KeyWarning}} — {{.Settings.KeyWarning}}{{end}}</dd>
+      </dl>
+    </section>
+  </div>
+</div>
+{{end}}
+
+{{define "settings-field"}}
+<div class="settings-field">
+  <div class="field-label">
+    <label for="f-{{.Key}}">{{.Label}}</label>
+    {{if .Secret}}{{if .DecryptFailed}}<span class="src src-unset">Unreadable</span>{{else if .Set}}<span class="src src-set">Set</span>{{else}}<span class="src src-unset">Not set</span>{{end}}{{end}}
+    <span class="src src-{{.Source}}" title="{{srcTitle .Source}}">{{.Source}}</span>
+  </div>
+  <div class="field-body">
+    {{if eq .Kind "select"}}
+    <select id="f-{{.Key}}" name="{{.Key}}" class="w-select">
+      {{range .Options}}<option value="{{.Value}}" {{if .Selected}}selected{{end}}>{{.Label}}</option>{{end}}
+    </select>
+    {{else if .Secret}}
+    <input id="f-{{.Key}}" name="{{.Key}}" type="password" class="w-text" autocomplete="new-password" placeholder="{{if .Set}}•••••••• (unchanged){{else}}Enter a new value{{end}}">
+    {{if .Set}}<label class="check"><input type="checkbox" name="empty_{{.Key}}" value="1"> Clear it (store an empty value that overrides env)</label>{{end}}
+    {{else if eq .Key "SCORE_GROUP_ORDER"}}
+    <textarea id="f-{{.Key}}" name="{{.Key}}" rows="2" class="w-text">{{.Value}}</textarea>
+    {{else if eq .Kind "number"}}
+    <input id="f-{{.Key}}" name="{{.Key}}" type="number" class="w-short" value="{{.Value}}" {{if .Step}}step="{{.Step}}"{{end}}>
+    {{else if eq .Kind "duration"}}
+    <input id="f-{{.Key}}" name="{{.Key}}" type="text" class="w-short" value="{{.Value}}">
+    {{else}}
+    <input id="f-{{.Key}}" name="{{.Key}}" type="text" class="w-text" value="{{.Value}}">
+    {{end}}
+    {{if .Help}}<span class="muted help">{{.Help}}</span>{{end}}
+    {{if .DecryptFailed}}<span class="error">Saved value could not be decrypted. It is still stored and is treated as unset.</span>{{end}}
+    {{if eq .Source "saved"}}
+    <button class="btn link" type="submit" name="reset" value="{{.Key}}">{{revert .Fallback}}</button>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
+{{define "test-out"}}
+{{if .TestResult}}<p class="ok">{{template "ico" "check"}}{{.TestResult}}</p>{{end}}{{if .Error}}<p class="bad">{{template "ico" "triangle-fill"}}{{.Error}}</p>{{end}}
+{{end}}

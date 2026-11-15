@@ -1,0 +1,8 @@
+/config/
+/data/
+.env
+*.db
+*.db-*
+*.db-wal
+*.db-shm
+migrate-overrides.json

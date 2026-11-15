@@ -1,0 +1,23 @@
+{
+  "data": {
+    "Page": {
+      "media": [
+        {
+          "id": 199,
+          "title": {"romaji": "Sen to Chihiro no Kamikakushi", "english": "Spirited Away", "native": "千と千尋の神隠し"},
+          "synonyms": ["Sen and Chihiro's Spiriting Away"],
+          "format": "MOVIE",
+          "status": "FINISHED",
+          "episodes": 1,
+          "nextAiringEpisode": null,
+          "airingSchedule": {"nodes": []},
+          "coverImage": {"extraLarge": "https://example.test/chihiro-xl.jpg", "large": "https://example.test/chihiro.jpg", "medium": ""},
+          "season": "SUMMER",
+          "seasonYear": 2001,
+          "startDate": {"year": 2001, "month": 7, "day": 20},
+          "relations": {"edges": []}
+        }
+      ]
+    }
+  }
+}
