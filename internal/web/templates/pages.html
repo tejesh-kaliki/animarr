@@ -18,6 +18,7 @@
     <a href="/shows" {{if eq .Nav "shows"}}class="active" aria-current="page"{{end}}>Shows</a>
     <a href="/search" {{if eq .Nav "search"}}class="active" aria-current="page"{{end}}>Search</a>
     <a href="/activity" {{if eq .Nav "activity"}}class="active" aria-current="page"{{end}}>Activity</a>
+    <a href="/encode" {{if eq .Nav "encode"}}class="active" aria-current="page"{{end}}>Encode</a>
     <a href="/settings" {{if eq .Nav "settings"}}class="active" aria-current="page"{{end}}>Settings</a>
   </nav>
 </header>
@@ -30,6 +31,7 @@
 {{if eq .Body "show"}}{{template "show" .}}{{end}}
 {{if eq .Body "search"}}{{template "search" .}}{{end}}
 {{if eq .Body "activity"}}{{template "activity" .}}{{end}}
+{{if eq .Body "encode"}}{{template "encode" .}}{{end}}
 {{if eq .Body "settings"}}{{template "settings" .}}{{end}}
 </main>
 <script>
@@ -494,4 +496,46 @@ document.body.addEventListener("htmx:afterRequest", function (e) {
 
 {{define "test-out"}}
 {{if .TestResult}}<p class="ok">{{template "ico" "check"}}{{.TestResult}}</p>{{end}}{{if .Error}}<p class="bad">{{template "ico" "triangle-fill"}}{{.Error}}</p>{{end}}
+{{end}}
+
+{{define "encode"}}
+<h1>Encode</h1>
+<p class="lede">The container queues files. A Mac worker encodes them to HEVC. Quality and the encoder are flags on that worker. The setup steps are in <code>docs/encoding.md</code>.</p>
+{{if not .EncodeOn}}<p class="banner"><strong>Encode is off.</strong> Turn on <code>ENCODE_ENABLED</code> in <a href="/settings#g-encode">Settings</a>. The worker is not given jobs while it is off.</p>{{end}}
+<div class="row-actions">
+  <form method="post" action="/encode/enqueue"><button class="btn primary" type="submit">Enqueue library</button></form>
+  <form method="post" action="/encode/requeue"><button class="btn" type="submit">Requeue failed</button></form>
+</div>
+{{template "encode-table" .}}
+{{end}}
+
+{{define "encode-table"}}
+<div id="encode-table" hx-get="/encode/table" hx-trigger="every 3s" hx-swap="outerHTML">
+<p class="muted">{{.EncodeSummary}}</p>
+{{if not .EncodeRows}}<p class="empty">No encode jobs. Enqueue the library, or wait for an import while encode is on.</p>{{end}}
+{{if .EncodeRows}}
+<div class="table-wrap">
+<table>
+  <thead>
+    <tr><th>Episode</th><th>State</th><th>Progress</th></tr>
+  </thead>
+  <tbody>
+    {{range .EncodeRows}}
+    <tr>
+      <td>{{if .ShowID}}<a href="/shows/{{.ShowID}}">{{.Title}}</a>{{else}}{{.Title}}{{end}}{{if .Episode}} E{{printf "%02d" .Episode}}{{end}}</td>
+      <td class="state"><span class="badge {{.Badge}}">{{template "ico" (icon .Badge)}}{{.State}}</span></td>
+      <td>
+        {{if .Live}}<div>{{.Live}}</div>{{end}}
+        {{if .Encoder}}<div class="muted">{{.Encoder}}</div>{{end}}
+        {{if .Sizes}}<div class="muted">{{.Sizes}}{{if .Saved}} · saved {{.Saved}}{{end}}</div>{{end}}
+        {{if .Error}}<div class="muted">{{.Error}}</div>{{end}}
+        {{if .Path}}<div class="path" title="{{.Path}}">{{.Path}}</div>{{end}}
+      </td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
+</div>
 {{end}}

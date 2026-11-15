@@ -49,6 +49,10 @@ func main() {
 		err = serve(cfg, origin)
 	case "organize":
 		err = organizeCmd(cfg, origin, args)
+	case "encode-worker":
+		err = encodeWorker(args)
+	case "encode-enqueue":
+		err = encodeEnqueue(cfg, origin)
 	case "rotate-key":
 		err = rotateCmd(cfg, args)
 	case "health":
@@ -72,6 +76,8 @@ func usage() {
 Usage:
   animarr [serve]
   animarr organize [--dry-run]
+  animarr encode-enqueue
+  animarr encode-worker --path-map container=host [--server URL] [--encoder hevc_videotoolbox|libx265] [--quality N] [--threads N] [--once] [--dry-run]
   animarr rotate-key [--old material] [--new material] [--write-file auto|true|false]
   animarr health
 

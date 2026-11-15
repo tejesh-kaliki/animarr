@@ -6,9 +6,9 @@ services:
     restart: unless-stopped
     # Shares the vpn container network namespace, same as Sonarr and qBittorrent.
     # Do not publish ports here: Docker ignores them under network_mode: container.
-    # 8990 is reachable inside that namespace. To publish it on the host, add
-    # `8990:8990` to the vpn service (not applied in this repo). Caddy needs an
-    # `animarr` alias on vpn's homelab_proxy network (also not applied).
+    # The homelab vpn service publishes 127.0.0.1:8990:8990 and aliases animarr
+    # on homelab_proxy. The encode worker uses http://127.0.0.1:8990.
+    # See docs/encoding.md.
     network_mode: container:vpn
     labels:
       homelab.stack: media
@@ -22,6 +22,7 @@ services:
       ANILIST_USERNAME: ${ANILIST_USERNAME:-}
       ANILIST_TOKEN: ${ANILIST_TOKEN:-}
       AUTOMATION_ENABLED: ${AUTOMATION_ENABLED:-false}
+      ENCODE_ENABLED: ${ENCODE_ENABLED:-false}
       ANIMARR_SECRET_KEY: ${ANIMARR_SECRET_KEY:-}
       NYAA_CATEGORY: ${NYAA_CATEGORY:-1_2}
       NYAA_URLS: ${NYAA_URLS:-https://nyaa.si}

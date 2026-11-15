@@ -1,0 +1,6 @@
+{
+  "streams": [
+    {"codec_type": "video", "codec_name": "av1", "pix_fmt": "yuv420p", "bits_per_raw_sample": 8}
+  ],
+  "format": {"duration": "12.0", "size": "2000000"}
+}

@@ -45,3 +45,15 @@ sql:
           - column: settings.updated_at
             go_type:
               type: UnixTime
+          - column: encodes.lease_until
+            go_type:
+              type: NullUnixTime
+          - column: encodes.started_at
+            go_type:
+              type: NullUnixTime
+          - column: encodes.created_at
+            go_type:
+              type: UnixTime
+          - column: encodes.updated_at
+            go_type:
+              type: UnixTime

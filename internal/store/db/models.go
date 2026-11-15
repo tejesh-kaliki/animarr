@@ -18,6 +18,25 @@ type Download struct {
 	Error    string
 }
 
+type Encode struct {
+	ID         int64
+	EpisodeID  int64
+	FilePath   string
+	State      string
+	Codec      string
+	Encoder    string
+	SrcSize    int64
+	DstSize    int64
+	Error      string
+	Progress   float64
+	Fps        float64
+	Speed      float64
+	LeaseUntil NullUnixTime
+	StartedAt  NullUnixTime
+	CreatedAt  UnixTime
+	UpdatedAt  UnixTime
+}
+
 type Episode struct {
 	ID           int64
 	ShowID       int64
