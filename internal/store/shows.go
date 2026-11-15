@@ -86,7 +86,7 @@ func ptrTime(t time.Time) *time.Time { return &t }
 func mapAll(rows []db.ListShowsRow) []Show {
 	out := make([]Show, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, showFromList(row.ID, row.AnilistID, row.TitleRomaji, row.TitleEnglish, row.TitleNative, row.Synonyms, row.Format, row.Status, row.ListStatus, row.Episodes, row.NextAiringEpisode, row.NextAiringAt, row.CoverImage, row.Season, row.SeasonYear, row.StartYear, row.Monitored, row.PreferredResolution, row.RelationsJson, row.CreatedAt, row.UpdatedAt, row.Description, row.Genres, row.Studio, row.FranchiseID, row.SeasonNumber, row.TotalEps, row.Downloaded))
+		out = append(out, showFromList(row.ID, row.AnilistID, row.TitleRomaji, row.TitleEnglish, row.TitleNative, row.Synonyms, row.Format, row.Status, row.ListStatus, row.Episodes, row.NextAiringEpisode, row.NextAiringAt, row.CoverImage, row.Season, row.SeasonYear, row.StartYear, row.StartMonth, row.StartDay, row.Monitored, row.PreferredResolution, row.RelationsJson, row.CreatedAt, row.UpdatedAt, row.Description, row.Genres, row.Studio, row.FranchiseID, row.SeasonNumber, row.TotalEps, row.Downloaded))
 	}
 	return out
 }
@@ -94,7 +94,7 @@ func mapAll(rows []db.ListShowsRow) []Show {
 func mapMonitored(rows []db.ListShowsMonitoredRow) []Show {
 	out := make([]Show, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, showFromList(row.ID, row.AnilistID, row.TitleRomaji, row.TitleEnglish, row.TitleNative, row.Synonyms, row.Format, row.Status, row.ListStatus, row.Episodes, row.NextAiringEpisode, row.NextAiringAt, row.CoverImage, row.Season, row.SeasonYear, row.StartYear, row.Monitored, row.PreferredResolution, row.RelationsJson, row.CreatedAt, row.UpdatedAt, row.Description, row.Genres, row.Studio, row.FranchiseID, row.SeasonNumber, row.TotalEps, row.Downloaded))
+		out = append(out, showFromList(row.ID, row.AnilistID, row.TitleRomaji, row.TitleEnglish, row.TitleNative, row.Synonyms, row.Format, row.Status, row.ListStatus, row.Episodes, row.NextAiringEpisode, row.NextAiringAt, row.CoverImage, row.Season, row.SeasonYear, row.StartYear, row.StartMonth, row.StartDay, row.Monitored, row.PreferredResolution, row.RelationsJson, row.CreatedAt, row.UpdatedAt, row.Description, row.Genres, row.Studio, row.FranchiseID, row.SeasonNumber, row.TotalEps, row.Downloaded))
 	}
 	return out
 }
@@ -102,7 +102,7 @@ func mapMonitored(rows []db.ListShowsMonitoredRow) []Show {
 func mapAiring(rows []db.ListShowsAiringRow) []Show {
 	out := make([]Show, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, showFromList(row.ID, row.AnilistID, row.TitleRomaji, row.TitleEnglish, row.TitleNative, row.Synonyms, row.Format, row.Status, row.ListStatus, row.Episodes, row.NextAiringEpisode, row.NextAiringAt, row.CoverImage, row.Season, row.SeasonYear, row.StartYear, row.Monitored, row.PreferredResolution, row.RelationsJson, row.CreatedAt, row.UpdatedAt, row.Description, row.Genres, row.Studio, row.FranchiseID, row.SeasonNumber, row.TotalEps, row.Downloaded))
+		out = append(out, showFromList(row.ID, row.AnilistID, row.TitleRomaji, row.TitleEnglish, row.TitleNative, row.Synonyms, row.Format, row.Status, row.ListStatus, row.Episodes, row.NextAiringEpisode, row.NextAiringAt, row.CoverImage, row.Season, row.SeasonYear, row.StartYear, row.StartMonth, row.StartDay, row.Monitored, row.PreferredResolution, row.RelationsJson, row.CreatedAt, row.UpdatedAt, row.Description, row.Genres, row.Studio, row.FranchiseID, row.SeasonNumber, row.TotalEps, row.Downloaded))
 	}
 	return out
 }

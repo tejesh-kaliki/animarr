@@ -80,7 +80,7 @@ func TestListAndSearch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if one.ID != 199 || one.StartYear() != 2001 {
+	if one.ID != 199 || one.StartYear() != 2001 || one.StartMonth() != 7 || one.StartDay() != 20 {
 		t.Fatalf("get %+v", one)
 	}
 }

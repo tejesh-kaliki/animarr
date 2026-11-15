@@ -76,4 +76,6 @@ type Show struct {
 	Studio              string
 	FranchiseID         int64
 	SeasonNumber        int64
+	StartMonth          int64
+	StartDay            int64
 }

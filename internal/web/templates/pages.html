@@ -28,6 +28,7 @@
 {{if eq .Body "dashboard"}}{{template "dashboard" .}}{{end}}
 {{if eq .Body "shows"}}{{template "shows" .}}{{end}}
 {{if eq .Body "show"}}{{template "show" .}}{{end}}
+{{if eq .Body "franchise"}}{{template "franchise" .}}{{end}}
 {{if eq .Body "search"}}{{template "search" .}}{{end}}
 {{if eq .Body "activity"}}{{template "activity" .}}{{end}}
 {{if eq .Body "settings"}}{{template "settings" .}}{{end}}
@@ -188,47 +189,62 @@ document.body.addEventListener("htmx:afterRequest", function (e) {
     <button class="btn" type="submit">Sort</button>
   </form>
 </div>
-{{if not .Cards}}<p class="empty">No shows in this filter. Sync AniList or add one from Search.</p>{{end}}
-{{range .Groups}}
-<section class="franchise">
-  <h2>{{.Title}} <span class="muted">{{len .Cards}} entries · {{.Downloaded}}/{{.TotalEps}} episodes</span></h2>
-  <div class="grid">
-{{range .Cards}}
-  <article class="card">
-    <a class="poster" href="/shows/{{.ID}}" tabindex="-1" aria-hidden="true">
-      {{if .CoverImage}}<img src="{{.CoverImage}}" alt="">{{else}}<span class="ph">{{letter (.DisplayTitle)}}</span>{{end}}
-      <span class="progress">{{.Downloaded}}/{{.TotalEps}}</span>
-      {{if gt .Missing 0}}<span class="newflag">{{.Missing}} missing</span>{{end}}
-    </a>
-    {{if gt .ProgressPct 0}}<div class="bar"><span style="width: {{.ProgressPct}}%"></span></div>{{end}}
-    <div class="meta">
-      <a href="/shows/{{.ID}}" title="{{.DisplayTitle}}">{{.DisplayTitle}}</a>
-      <p class="muted">{{.NextLine}}</p>
-    </div>
-  </article>
-{{end}}
-  </div>
-</section>
-{{end}}
-{{if .Singles}}
-{{if .Groups}}<h2 class="franchise-other">Other shows</h2>{{end}}
+{{if not .Grid}}<p class="empty">No shows in this filter. Sync AniList or add one from Search.</p>{{end}}
+{{if .Grid}}
 <div class="grid">
-{{range .Singles}}
+{{range .Grid}}
   <article class="card">
-    <a class="poster" href="/shows/{{.ID}}" tabindex="-1" aria-hidden="true">
+    <a class="poster" href="{{.Href}}" tabindex="-1" aria-hidden="true">
       {{if .CoverImage}}<img src="{{.CoverImage}}" alt="">{{else}}<span class="ph">{{letter (.DisplayTitle)}}</span>{{end}}
       <span class="progress">{{.Downloaded}}/{{.TotalEps}}</span>
-      {{if gt .Missing 0}}<span class="newflag">{{.Missing}} missing</span>{{end}}
+      {{if .Multi}}<span class="newflag seasons">{{.Entries}} seasons</span>{{else}}{{if gt .Missing 0}}<span class="newflag">{{.Missing}} missing</span>{{end}}{{end}}
     </a>
     {{if gt .ProgressPct 0}}<div class="bar"><span style="width: {{.ProgressPct}}%"></span></div>{{end}}
     <div class="meta">
-      <a href="/shows/{{.ID}}" title="{{.DisplayTitle}}">{{.DisplayTitle}}</a>
-      <p class="muted">{{.NextLine}}</p>
+      <a href="{{.Href}}" title="{{.DisplayTitle}}">{{.DisplayTitle}}</a>
+      <p class="muted">{{if .Multi}}{{.Badge}}{{else}}{{.NextLine}}{{end}}</p>
     </div>
   </article>
 {{end}}
 </div>
 {{end}}
+{{end}}
+
+{{define "franchise"}}
+<div class="showhead">
+  {{if .Show.CoverImage}}<img src="{{.Show.CoverImage}}" alt="">{{else}}<span class="ph">{{letter (.Show.DisplayTitle)}}</span>{{end}}
+  <div>
+    <p class="muted"><a href="/shows">Shows</a></p>
+    <h1>{{.Show.DisplayTitle}}</h1>
+    <p class="muted">{{.EpSummary}}</p>
+    <div class="toolbar">
+      <form method="post" action="/shows/add">
+        <input type="hidden" name="anilist_id" value="{{.Show.AniListID}}">
+        <button class="btn" type="submit" name="all_seasons" value="1">Add all seasons</button>
+      </form>
+    </div>
+  </div>
+</div>
+<h2>Entries</h2>
+<div class="table-wrap">
+<table class="franchise-entries">
+  <thead>
+    <tr><th></th><th>Title</th><th>Kind</th><th>Aired</th><th>Episodes</th><th>Monitor</th></tr>
+  </thead>
+  <tbody>
+    {{range .Entries}}
+    <tr>
+      <td class="cover">{{if .CoverImage}}<img src="{{.CoverImage}}" alt="">{{else}}<span class="ph">{{letter (.DisplayTitle)}}</span>{{end}}</td>
+      <td><a href="/shows/{{.ID}}">{{.DisplayTitle}}</a></td>
+      <td>{{.Label}}</td>
+      <td class="muted">{{if .Released}}{{.Released}}{{else}}—{{end}}</td>
+      <td>{{.Downloaded}}/{{.TotalEps}}</td>
+      <td>{{if .Monitored}}Monitored{{else}}Not monitored{{end}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+</div>
 {{end}}
 
 {{define "show"}}

@@ -443,6 +443,8 @@ func (s *Service) upsertMedia(ctx context.Context, m anilist.Media, listStatus s
 		Season:            m.Season,
 		SeasonYear:        m.SeasonYearValue(),
 		StartYear:         m.StartYear(),
+		StartMonth:        m.StartMonth(),
+		StartDay:          m.StartDay(),
 		Monitored:         monitored,
 		RelationsJSON:     m.RelationsJSON(),
 		Description:       m.Description,

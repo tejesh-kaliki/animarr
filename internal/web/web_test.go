@@ -153,6 +153,96 @@ func TestPagesAndActions(t *testing.T) {
 	}
 }
 
+func TestFranchiseCardAndPage(t *testing.T) {
+	dir := t.TempDir()
+	st, err := store.Open(filepath.Join(dir, "animarr.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	ctx := context.Background()
+	add := func(anilist int, title, format string, year, month, day, eps int) store.Show {
+		t.Helper()
+		sh, err := st.UpsertShow(ctx, store.Show{
+			AniListID: anilist, TitleEnglish: title, TitleRomaji: title,
+			Format: format, Status: "FINISHED", Episodes: eps, Monitored: true,
+			StartYear: year, StartMonth: month, StartDay: day, CoverImage: title + ".jpg",
+		}, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := st.EnsureEpisode(ctx, sh.ID, 1, nil, store.StateDownloaded); err != nil {
+			t.Fatal(err)
+		}
+		return sh
+	}
+	root := add(10, "Book One", "TV", 2019, 4, 6, 12)
+	second := add(20, "Book Two", "TV", 2021, 7, 1, 12)
+	movie := add(15, "Book Movie", "MOVIE", 2020, 1, 10, 1)
+	other := add(99, "Other Show", "TV", 2022, 1, 1, 4)
+	if err := st.SetFranchise(ctx, root.ID, 10, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetFranchise(ctx, second.ID, 10, 2); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetFranchise(ctx, movie.ID, 10, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetFranchise(ctx, other.ID, 99, 1); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{ListenAddr: ":8990", DataPath: dir, LibraryDir: filepath.Join(dir, "lib"), MatchThreshold: 0.82, Score: score.DefaultConfig(), AutomationEnabled: true}
+	pipe := &pipeline.Service{Config: cfg, Store: st, Indexer: fakeIndex{}, Log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	srv, err := New(pipe, st, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(srv.Handler())
+	defer ts.Close()
+
+	body := get(t, ts, "/shows?sort=title")
+	if strings.Contains(body, "Other shows") || strings.Contains(body, `class="franchise"`) {
+		t.Fatalf("shows still expands franchises: %s", body)
+	}
+	if strings.Count(body, `href="/franchises/10"`) != 2 {
+		t.Fatalf("franchise card links: %s", body)
+	}
+	if strings.Contains(body, "Book Two") || strings.Contains(body, "Book Movie") {
+		t.Fatalf("member titles leaked onto the grid: %s", body)
+	}
+	if !strings.Contains(body, "Book One") || !strings.Contains(body, "3 seasons · 3/3 eps") || !strings.Contains(body, "Other Show") {
+		t.Fatalf("grid: %s", body)
+	}
+	if strings.Count(body, `class="card"`) != 2 {
+		t.Fatalf("card count: %s", body)
+	}
+
+	page := get(t, ts, "/franchises/10")
+	if !strings.Contains(page, "Add all seasons") || !strings.Contains(page, `name="all_seasons"`) {
+		t.Fatalf("add all seasons: %s", page)
+	}
+	one := strings.Index(page, "Book One")
+	mov := strings.Index(page, "Book Movie")
+	two := strings.Index(page, "Book Two")
+	if one < 0 || mov < 0 || two < 0 || !(one < mov && mov < two) {
+		t.Fatalf("date order one=%d movie=%d two=%d\n%s", one, mov, two, page)
+	}
+	if !strings.Contains(page, "Apr 2019") || !strings.Contains(page, "Jan 2020") || !strings.Contains(page, "Jul 2021") {
+		t.Fatalf("months: %s", page)
+	}
+	if !strings.Contains(page, "Season 1") || !strings.Contains(page, ">Movie<") || !strings.Contains(page, "Season 2") {
+		t.Fatalf("labels: %s", page)
+	}
+	if !strings.Contains(page, "/shows/"+strconv.FormatInt(second.ID, 10)) || !strings.Contains(page, "Monitored") {
+		t.Fatalf("links: %s", page)
+	}
+	show := get(t, ts, "/shows/"+strconv.FormatInt(second.ID, 10))
+	if !strings.Contains(show, "Book Two") || !strings.Contains(show, "Search") {
+		t.Fatalf("show page: %s", show)
+	}
+}
+
 func TestActivityPlainSummary(t *testing.T) {
 	dir := t.TempDir()
 	st, err := store.Open(filepath.Join(dir, "animarr.db"))

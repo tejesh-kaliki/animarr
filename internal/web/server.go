@@ -51,8 +51,8 @@ type view struct {
 	Level                          string
 	AirGroups                      []airGroup
 	Cards                          []showCard
-	Groups                         []franchiseGroup
-	Singles                        []showCard
+	Grid                           []gridCard
+	Entries                        []franchiseEntry
 	Sort                           string
 	Rows                           []epView
 	EpSummary                      string
@@ -122,6 +122,7 @@ func New(pipe *pipeline.Service, st *store.Store, cfg config.Config) (*Server, e
 	mux.HandleFunc("GET /{$}", s.dashboard)
 	mux.HandleFunc("GET /shows", s.shows)
 	mux.HandleFunc("GET /shows/{id}", s.show)
+	mux.HandleFunc("GET /franchises/{id}", s.franchise)
 	mux.HandleFunc("POST /shows/{id}/monitored", s.postMonitored)
 	mux.HandleFunc("POST /shows/{id}/resolution", s.postResolution)
 	mux.HandleFunc("POST /shows/{id}/episodes/{n}/ignore", s.postEpisode("ignore"))

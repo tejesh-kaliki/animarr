@@ -240,6 +240,11 @@ h2 {
 }
 .progress { left: .45rem; bottom: .45rem; }
 .newflag { right: .45rem; top: .45rem; color: var(--warn); background: #3a2e14; }
+.newflag.seasons { color: var(--text); background: rgba(12, 14, 18, 0.82); }
+.franchise-entries td.cover { width: 42px; }
+.franchise-entries td.cover img, .franchise-entries td.cover .ph {
+  width: 36px; height: 54px; object-fit: cover; border-radius: 6px; font-size: .9rem;
+}
 .bar { height: 4px; background: #2a3142; }
 .bar > span, .dl-bar > span { display: block; height: 100%; background: var(--accent); }
 .dl-bar {
@@ -694,7 +699,4 @@ button.htmx-request::after, .htmx-request button::after {
   }
 }
 
-.franchise { margin: 0 0 var(--gap, 1.5rem); }
-.franchise h2 { font-size: 1.05rem; margin: 1.25rem 0 .6rem; }
-.franchise h2 .muted { font-weight: 400; font-size: .85rem; margin-left: .5rem; }
-.franchise-other { font-size: 1.05rem; margin: 1.5rem 0 .6rem; }
+

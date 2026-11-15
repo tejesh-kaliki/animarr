@@ -3,6 +3,7 @@ package web
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strconv"
@@ -51,8 +52,61 @@ func (s *Server) shows(w http.ResponseWriter, r *http.Request) {
 	}
 	cards := s.cards(r.Context(), shows)
 	sortShows(cards, sortKey)
-	groups, singles := groupFranchises(cards)
-	s.page(w, view{Title: "Shows", Nav: "shows", Body: "shows", Shows: shows, Cards: cards, Groups: groups, Singles: singles, Filter: filter, Sort: sortKey})
+	grid := libraryGrid(cards)
+	sortGrid(grid, sortKey)
+	s.page(w, view{Title: "Shows", Nav: "shows", Body: "shows", Shows: shows, Cards: cards, Grid: grid, Filter: filter, Sort: sortKey})
+}
+
+func (s *Server) franchise(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil || id <= 0 {
+		s.fail(w, r, errBadID, http.StatusBadRequest)
+		return
+	}
+	shows, err := s.Store.ListShows(r.Context(), "all")
+	if err != nil {
+		s.fail(w, r, err, http.StatusInternalServerError)
+		return
+	}
+	var members []store.Show
+	for _, sh := range shows {
+		if sh.FranchiseID == id {
+			members = append(members, sh)
+		}
+	}
+	if len(members) == 0 {
+		s.fail(w, r, store.ErrNotFound, http.StatusNotFound)
+		return
+	}
+	ordered := orderByStart(s.cards(r.Context(), members))
+	root := ordered[0]
+	for _, c := range ordered {
+		if c.AniListID == id {
+			root = c
+			break
+		}
+	}
+	entries := make([]franchiseEntry, len(ordered))
+	downloaded, total := 0, 0
+	for i, c := range ordered {
+		entries[i] = franchiseEntry{
+			showCard: c,
+			Label:    seasonLabel(c.Show),
+			Released: releaseMonth(c.Show),
+		}
+		downloaded += c.Downloaded
+		total += c.TotalEps
+	}
+	n := len(entries)
+	word := "seasons"
+	if n == 1 {
+		word = "season"
+	}
+	s.page(w, view{
+		Title: root.DisplayTitle(), Nav: "shows", Body: "franchise",
+		Show: root.Show, Entries: entries,
+		EpSummary: fmt.Sprintf("%d %s · %d/%d eps", n, word, downloaded, total),
+	})
 }
 
 func (s *Server) show(w http.ResponseWriter, r *http.Request) {
@@ -500,6 +554,38 @@ func (s *Server) cards(ctx context.Context, shows []store.Show) []showCard {
 		out[i] = card
 	}
 	return out
+}
+
+func sortGrid(cards []gridCard, sortKey string) {
+	switch sortKey {
+	case "title":
+		slices.SortStableFunc(cards, func(a, b gridCard) int {
+			return strings.Compare(strings.ToLower(a.DisplayTitle()), strings.ToLower(b.DisplayTitle()))
+		})
+	case "added":
+		slices.SortStableFunc(cards, func(a, b gridCard) int {
+			return b.CreatedAt.Compare(a.CreatedAt)
+		})
+	default:
+		slices.SortStableFunc(cards, func(a, b gridCard) int {
+			at, bt := a.NextAiringAt, b.NextAiringAt
+			aMiss := at == nil || at.IsZero()
+			bMiss := bt == nil || bt.IsZero()
+			switch {
+			case aMiss && bMiss:
+				return strings.Compare(strings.ToLower(a.DisplayTitle()), strings.ToLower(b.DisplayTitle()))
+			case aMiss:
+				return 1
+			case bMiss:
+				return -1
+			default:
+				if c := at.Compare(*bt); c != 0 {
+					return c
+				}
+				return strings.Compare(strings.ToLower(a.DisplayTitle()), strings.ToLower(b.DisplayTitle()))
+			}
+		})
+	}
 }
 
 func sortShows(cards []showCard, sortKey string) {

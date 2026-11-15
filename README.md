@@ -144,6 +144,8 @@ Jellyfin metadata:
 
 Search, ignore, unignore, and re-download are on the show page. Search can add a show that is not on the AniList user list. Those rows are monitored.
 
+The Shows tab is one grid of cards. Filters (all, monitored, airing) and the sort (next airing, title, recently added) still apply. A franchise with more than one entry in the current filter is a single card: the root entry's title and cover, plus a badge like `4 seasons · 36/48 eps`. A single entry stays a normal show card. The franchise card opens `/franchises/{anilistId}`, which lists every stored entry of that franchise in air-date order. The date is the month and year of the first airing (`Apr 2019`). Movies, OVAs, and specials are labeled that way and sit by their date, not after the numbered seasons. Each row links to its show page. Add all seasons, on Search and on the franchise page, still adds the connected TV seasons.
+
 ## Networking
 
 animarr is intended to share the vpn container with Sonarr, Prowlarr, Whisparr, and qBittorrent.
@@ -167,7 +169,7 @@ Recreating the vpn container orphans every container that shares its network. Re
 
 `cmd/animarr` is the binary. `internal/` holds AniList, the indexer interface, Nyaa, the release parser, matcher, scorer, qBittorrent, Jellyfin, the importer, NFO writer, franchise layout, SQLite, settings, the secret box, the pipeline, the scheduler, and the UI. Nyaa is the indexer. Score weights live in `internal/tuning` so the config loader does not import the scorer.
 
-SQLite uses `modernc.org/sqlite` (pure Go, `CGO_ENABLED=0`). Queries are generated with [sqlc](https://sqlc.dev) into `internal/store/db`. The schema is the numbered files in `sql/schema` (goose-style `-- +goose Up` sections). `sql/queries` holds the query files. `make generate` runs `sqlc generate`. The Docker image builds the committed Go and does not need sqlc. On startup the process applies any migration that is not yet in `schema_migrations`. `0001` matches the original tables, so a database created before sqlc opens and then gains the franchise columns from `0002` and the `settings` table from `0003`.
+SQLite uses `modernc.org/sqlite` (pure Go, `CGO_ENABLED=0`). Queries are generated with [sqlc](https://sqlc.dev) into `internal/store/db`. The schema is the numbered files in `sql/schema` (goose-style `-- +goose Up` sections). `sql/queries` holds the query files. `make generate` runs `sqlc generate`. The Docker image builds the committed Go and does not need sqlc. On startup the process applies any migration that is not yet in `schema_migrations`. `0001` matches the original tables, so a database created before sqlc opens and then gains the franchise columns from `0002`, the `settings` table from `0003`, and the start month and day from `0004`. The next AniList sync fills month and day on rows that were stored before `0004`.
 
 ```bash
 make generate   # requires sqlc on PATH

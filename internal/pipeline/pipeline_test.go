@@ -318,8 +318,8 @@ func TestSyncSequelJoinsFranchise(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"data":{"MediaListCollection":{"lists":[{"status":"CURRENT","entries":[
-			{"status":"CURRENT","media":{"id":10,"title":{"romaji":"Book One","english":"Book One"},"format":"TV","status":"FINISHED","episodes":4,"description":"A <i>girl</i> &amp; books","genres":["Fantasy"],"studios":{"nodes":[{"name":"Wit"}]},"startDate":{"year":2019},"relations":{"edges":[{"relationType":"SEQUEL","node":{"id":11,"type":"ANIME","format":"TV","title":{"romaji":"Book Two"}}}]}}},
-			{"status":"CURRENT","media":{"id":11,"title":{"romaji":"Book Two","english":"Book Two"},"format":"TV","status":"FINISHED","episodes":3,"startDate":{"year":2020},"relations":{"edges":[{"relationType":"PREQUEL","node":{"id":10,"type":"ANIME","format":"TV","title":{"romaji":"Book One"}}}]}}}
+			{"status":"CURRENT","media":{"id":10,"title":{"romaji":"Book One","english":"Book One"},"format":"TV","status":"FINISHED","episodes":4,"description":"A <i>girl</i> &amp; books","genres":["Fantasy"],"studios":{"nodes":[{"name":"Wit"}]},"startDate":{"year":2019,"month":4,"day":6},"relations":{"edges":[{"relationType":"SEQUEL","node":{"id":11,"type":"ANIME","format":"TV","title":{"romaji":"Book Two"}}}]}}},
+			{"status":"CURRENT","media":{"id":11,"title":{"romaji":"Book Two","english":"Book Two"},"format":"TV","status":"FINISHED","episodes":3,"startDate":{"year":2020,"month":1},"relations":{"edges":[{"relationType":"PREQUEL","node":{"id":10,"type":"ANIME","format":"TV","title":{"romaji":"Book One"}}}]}}}
 		]}]}}}`)
 	}))
 	defer srv.Close()
@@ -349,6 +349,9 @@ func TestSyncSequelJoinsFranchise(t *testing.T) {
 	}
 	if first.Studio != "Wit" || len(first.Genres) != 1 || first.Genres[0] != "Fantasy" || !strings.Contains(first.Description, "girl") {
 		t.Fatalf("metadata %+v", first)
+	}
+	if first.StartYear != 2019 || first.StartMonth != 4 || first.StartDay != 6 || second.StartYear != 2020 || second.StartMonth != 1 || second.StartDay != 0 {
+		t.Fatalf("start date first %+v second %+v", first, second)
 	}
 	dest, err := svc.libraryDest(ctx, cfg, second, 1, ".mkv")
 	if err != nil {

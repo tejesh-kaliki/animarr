@@ -35,7 +35,7 @@ SELECT
     e.file_path, e.score, e.version, e.downloaded_at, e.last_search_at,
     s.id AS show_pk, s.anilist_id, s.title_romaji, s.title_english, s.title_native,
     s.synonyms, s.format, s.status, s.list_status, s.episodes, s.next_airing_episode,
-    s.next_airing_at, s.cover_image, s.season, s.season_year, s.start_year,
+    s.next_airing_at, s.cover_image, s.season, s.season_year, s.start_year, s.start_month, s.start_day,
     s.monitored, s.preferred_resolution, s.relations_json, s.created_at, s.updated_at,
     s.description, s.genres, s.studio, s.franchise_id, s.season_number
 FROM episodes e
