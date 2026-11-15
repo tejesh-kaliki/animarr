@@ -66,6 +66,7 @@ type view struct {
 	Preferred                      string
 	AutomationOff                  bool
 	CopyFallback                   bool
+	GrabNote                       string
 }
 
 type epView struct {
@@ -75,6 +76,30 @@ type epView struct {
 	Progress    int
 	HasProgress bool
 	Next        bool
+	CSRF        string
+	GrabOff     bool
+}
+
+// choiceView is one interactive-search row.
+type choiceView struct {
+	Title, InfoHash, Size, Peers, Age, Group, Resolution, Codec, Reasons, Reject string
+	Score                                                                        int
+	Rejected                                                                     bool
+	Seeders, Leechers                                                            int
+	Bytes                                                                        int64
+	AgeUnix                                                                      int64
+}
+
+// releasePanel is the HTMX fragment of candidate releases.
+type releasePanel struct {
+	ShowID  int64
+	Episode int
+	CSRF    string
+	Rows    []choiceView
+	Error   string
+	Note    string
+	GrabOff bool
+	Flash   string
 }
 
 // New parses templates and routes.
@@ -128,6 +153,10 @@ func New(pipe *pipeline.Service, st *store.Store, cfg config.Config) (*Server, e
 	mux.HandleFunc("POST /shows/{id}/episodes/{n}/ignore", s.postEpisode("ignore"))
 	mux.HandleFunc("POST /shows/{id}/episodes/{n}/unignore", s.postEpisode("unignore"))
 	mux.HandleFunc("POST /shows/{id}/episodes/{n}/search", s.postEpisode("search"))
+	mux.HandleFunc("POST /shows/{id}/episodes/{n}/interactive", s.postInteractive)
+	mux.HandleFunc("POST /shows/{id}/episodes/{n}/grab", s.postGrab)
+	mux.HandleFunc("POST /shows/{id}/interactive", s.postInteractive)
+	mux.HandleFunc("POST /shows/{id}/grab", s.postGrab)
 	mux.HandleFunc("POST /shows/{id}/episodes/{n}/redownload", s.postEpisode("redownload"))
 	mux.HandleFunc("POST /shows/add", s.postAdd)
 	mux.HandleFunc("GET /search", s.search)

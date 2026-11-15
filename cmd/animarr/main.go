@@ -198,7 +198,7 @@ func logAutomation(prov *settings.Provider) {
 	if cur.AutomationEnabled {
 		return
 	}
-	slog.Warn("automation is disabled: AniList sync and the UI still run, but searches, grabs, imports, NFO writes, and Jellyfin refresh do not. Enable AUTOMATION_ENABLED in Settings after existing files are recorded")
+	slog.Warn("automation is disabled: scheduled Nyaa search and automatic grabs are paused. Show-page Search, Interactive search, and Grab still run. Imports, NFO writes, and Jellyfin refresh wait until AUTOMATION_ENABLED is on")
 }
 
 func openSettings(cfg config.Config, origin map[string]config.Source) (*store.Store, *settings.Provider, error) {

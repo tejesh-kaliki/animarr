@@ -1,6 +1,7 @@
 package score
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -64,6 +65,13 @@ func TestScoreOrdering(t *testing.T) {
 	}
 	if _, ok := s(batch, 100, ""); ok {
 		t.Fatal("batch should be rejected")
+	}
+	explained := Explain(batch, 100, "", cfg)
+	if explained.OK || explained.Total <= 0 || !strings.Contains(explained.Reject, "batch") {
+		t.Fatalf("explain batch %+v", explained)
+	}
+	if len(explained.Lines) == 0 {
+		t.Fatal("explain lines empty")
 	}
 	if _, ok := s(toons, 0, ""); ok {
 		t.Fatal("zero seeders should be rejected at the default floor")

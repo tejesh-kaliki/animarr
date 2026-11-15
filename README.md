@@ -35,7 +35,7 @@ Commands:
 
 A value saved on the Settings page overrides the environment variable of the same name. The environment overrides `CONFIG_FILE` (JSON). Built-in defaults are last. The page shows the effective value and its source (`saved`, `env`, `file`, or `default`). Reset deletes the saved row and the env, file, or default applies again. Clients and the scheduler read the effective config on the next sync, RSS poll, or download poll, so a save does not need a restart.
 
-`AUTOMATION_ENABLED` defaults to false. While it is off, AniList sync and the pages still run, and nothing else does: no Nyaa search or RSS grab, no qBittorrent add, no import into the library, no NFO or poster write, and no Jellyfin refresh. Search and re-download refuse with "Automation is off: enable it in Settings". A banner on every page, and the Automation stat on the Dashboard, show the same state and link to Settings. The scheduler reads the switch on every cycle. Turn it on in Settings, or set the variable to `true`, when you want grabs to start. `organize` is not gated by the switch.
+`AUTOMATION_ENABLED` defaults to false. While it is off, AniList sync and the pages still run, and the scheduler does not: no Nyaa RSS or backlog search, no automatic grab, and the download poll does not import, write NFO files, or refresh Jellyfin. Buttons on a show are not gated. Search, Re-download, Interactive search, and Grab run either way. Grab fails with a message on the page when qBittorrent is not configured (empty WebUI URL, or no client). A file grabbed while the switch is off sits in qBittorrent until you turn automation on; the next download poll then imports it, writes NFO, and refreshes Jellyfin. A banner on every page, and the Automation stat on the Dashboard, show the state and link to Settings. The scheduler reads the switch on every cycle. Turn it on in Settings, or set the variable to `true`, when you want scheduled grabs to start. `organize` is not gated by the switch.
 
 `LISTEN_ADDR`, `DATA_PATH`, `LOG_LEVEL`, `CONFIG_FILE`, and `ANIMARR_SECRET_KEY` are read at startup and are not on the form. Everything else in the table is editable. The UI column says `yes` or `secret`. A secret field shows set or not set, never the value. Leaving it blank keeps the current secret. Check "Save empty" to store an empty secret, which overrides an env var. Empty `QB_USERNAME` and `QB_PASSWORD` together skip qBittorrent login (localhost bypass).
 
@@ -43,7 +43,7 @@ Save writes only fields that differ from the current effective value, so a click
 
 | Variable | Default | UI | Meaning |
 | --- | --- | --- | --- |
-| `AUTOMATION_ENABLED` | `false` | yes | Master switch. When false, AniList sync and the UI keep working, but Nyaa searches, qBittorrent adds, library imports, NFO and poster writes, and Jellyfin refresh do not. Search and re-download refuse until you turn it on. A saved value overrides this variable |
+| `AUTOMATION_ENABLED` | `false` | yes | Master switch for the scheduler. When false, AniList sync and the UI keep working, scheduled Nyaa searches and automatic grabs do not run, and the download poll does not import. Show-page Search, Re-download, Interactive search, and Grab still run. A saved value overrides this variable |
 | `ANILIST_USERNAME` | empty | yes | Public AniList user. CURRENT and PLANNING are monitored when first added. A later sync does not turn monitoring back on. Empty skips the scheduled sync |
 | `ANILIST_TOKEN` | empty | secret | Optional. Sent as `Authorization: Bearer` when set |
 | `LISTEN_ADDR` | `:8990` | no | HTTP listen address. Restart to change it |
@@ -112,7 +112,7 @@ If decryption fails, the row is kept. The secret is treated as unset, including 
 
 ## What the loop does
 
-Automation is off until you enable it. The steps that talk to Nyaa, qBittorrent, the library, or Jellyfin do not run while it is off. AniList sync still does. On startup, when the switch is off, the process logs that once.
+Automation is off until you enable it. The scheduler steps that search Nyaa, grab automatically, import, write NFO, or refresh Jellyfin do not run while it is off. AniList sync still does. Show-page buttons still search and grab. On startup, when the switch is off, the process logs that once.
 
 1. Every 30 minutes, load the public AniList lists `CURRENT` and `PLANNING`. New rows of either status start monitored. Existing monitored flags are kept, including when you turn a show off. Shows that leave the list stay in the database.
 2. Every 15 minutes, read the Nyaa RSS feed and match titles against monitored shows. Batch and season-pack titles (ranges like `01-12`, the words `Batch` and `Complete`) are ignored.
@@ -146,6 +146,8 @@ Search, ignore, unignore, and re-download are on the show page. Search can add a
 
 The Shows tab is one grid of cards. Filters (all, monitored, airing) and the sort (next airing, title, recently added) still apply. A franchise with more than one entry in the current filter is a single card: the root entry's title and cover, plus a badge like `4 seasons · 36/48 eps`. A single entry stays a normal show card. The franchise card opens `/franchises/{anilistId}`, which lists every stored entry of that franchise in air-date order. The date is the month and year of the first airing (`Apr 2019`). Movies, OVAs, and specials are labeled that way and sit by their date, not after the numbered seasons. Each row links to its show page. Add all seasons, on Search and on the franchise page, still adds the connected TV seasons.
 
+Search on an episode still grabs the highest-scoring release. Interactive search, on each episode and as Search all releases on the show, lists every Nyaa hit for the show title: release name, size, seeders and leechers, published date, group, resolution, codec, and the score with a short reason list. Releases the automatic search would skip (wrong episode, batch, too few seeders, title mismatch) stay in the table and are marked Rejected. The table is sorted by score and the column headers re-sort it in the browser. Grab sends that release through the same qBittorrent, download-row, history, import, NFO, and Jellyfin path as an automatic grab. An episode Grab ties the torrent to that episode. A batch grabbed from Search all releases is tied to each episode in its range. These posts use the same-site token as Settings.
+
 ## Networking
 
 animarr is intended to share the vpn container with Sonarr, Prowlarr, Whisparr, and qBittorrent.
@@ -178,8 +180,8 @@ make check      # CGO_ENABLED=0 go vet and go test
 
 ## Limitations
 
-- Automation is off until `AUTOMATION_ENABLED` is turned on. A first start syncs AniList and does not grab or import.
-- Season packs and batches are detected and skipped. Split them by hand or wait for single-episode releases.
+- Automation is off until `AUTOMATION_ENABLED` is turned on. A first start syncs AniList and does not schedule grabs or imports. Show-page buttons can still search and send a torrent; the file imports after the switch is on.
+- Automatic search still skips season packs and batches. Interactive search lists them, marked Rejected, and Grab can send one. A pack that does not name its episode range has to be grabbed from an episode row.
 - AniList airing times are the first page of the schedule (50 episodes) plus `nextAiringEpisode`.
 - A Nyaa title like `S02E07` is episode 7 of the matched AniList entry. The library season folder comes from the franchise, not from that `S02`.
 - Upgrades are off except repacks and v2+ inside the upgrade window.

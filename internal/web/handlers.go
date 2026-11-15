@@ -128,18 +128,22 @@ func (s *Server) show(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	facts := episodeFacts(eps, sh, now)
 	prog := s.progressFor(r.Context(), sh.ID)
+	tok := s.csrfToken(w, r)
+	note := s.grabNote(r)
 	rows := make([]epView, len(eps))
 	for i, ep := range eps {
 		p, ok := prog[ep.Number]
 		rows[i] = epView{
 			Show: sh, Episode: ep, HasProgress: ok, Progress: p,
 			Next: facts.Next > 0 && ep.Number == facts.Next,
+			CSRF: tok, GrabOff: note != "",
 		}
 	}
 	s.page(w, view{
 		Title: sh.DisplayTitle(), Nav: "shows", Body: "show",
 		Show: sh, Episodes: eps, Rows: rows, EpSummary: facts.line(), JumpEp: facts.Jump,
 		AirClock: airClock(sh.NextAiringAt), Preferred: s.current(r).Score.PreferredResolution,
+		CSRF: tok, GrabNote: note,
 	})
 }
 
@@ -363,11 +367,160 @@ func (s *Server) postEpisode(action string) http.HandlerFunc {
 				s.fail(w, r, err, statusFor(err))
 				return
 			}
-			s.render(w, "episode-row", s.oneRow(r.Context(), sh, ep, flash))
+			row := s.oneRow(r.Context(), sh, ep, flash)
+			row.CSRF = s.csrfToken(w, r)
+			row.GrabOff = s.grabNote(r) != ""
+			s.render(w, "episode-row", row)
 			return
 		}
 		http.Redirect(w, r, "/shows/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
 	}
+}
+
+func (s *Server) postInteractive(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, r, err, http.StatusBadRequest)
+		return
+	}
+	if err := s.checkCSRF(r); err != nil {
+		s.fail(w, r, err, http.StatusForbidden)
+		return
+	}
+	id, n, err := showEpisode(r)
+	if err != nil {
+		s.fail(w, r, err, http.StatusBadRequest)
+		return
+	}
+	if s.Pipe == nil {
+		s.fail(w, r, errNoPipe, http.StatusInternalServerError)
+		return
+	}
+	rows, err := s.Pipe.ListChoices(r.Context(), id, n)
+	panel := s.releasePanel(id, n, rows, "")
+	panel.CSRF = s.csrfToken(w, r)
+	panel.Note = s.grabNote(r)
+	panel.GrabOff = panel.Note != ""
+	if err != nil {
+		panel.Error = err.Error()
+		panel.Rows = nil
+	}
+	s.render(w, "release-panel", panel)
+}
+
+func (s *Server) postGrab(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		s.fail(w, r, err, http.StatusBadRequest)
+		return
+	}
+	if err := s.checkCSRF(r); err != nil {
+		s.fail(w, r, err, http.StatusForbidden)
+		return
+	}
+	id, n, err := showEpisode(r)
+	if err != nil {
+		s.fail(w, r, err, http.StatusBadRequest)
+		return
+	}
+	if s.Pipe == nil {
+		s.fail(w, r, errNoPipe, http.StatusInternalServerError)
+		return
+	}
+	if note := s.grabNote(r); note != "" {
+		s.fail(w, r, errors.New(note), http.StatusBadGateway)
+		return
+	}
+	if err := s.Pipe.GrabChoice(r.Context(), id, n, r.FormValue("infohash")); err != nil {
+		s.fail(w, r, err, http.StatusBadGateway)
+		return
+	}
+	flash := "Sent to qBittorrent"
+	if !s.current(r).AutomationEnabled {
+		flash = "Sent to qBittorrent. The download poll is paused while automation is off, so the file imports after you turn it on."
+	}
+	if n > 0 && hx(r) {
+		sh, err := s.Store.GetShow(r.Context(), id)
+		if err != nil {
+			s.fail(w, r, err, statusFor(err))
+			return
+		}
+		ep, err := s.Store.GetEpisode(r.Context(), id, n)
+		if err != nil {
+			s.fail(w, r, err, statusFor(err))
+			return
+		}
+		row := s.oneRow(r.Context(), sh, ep, flash)
+		row.CSRF = s.csrfToken(w, r)
+		row.GrabOff = s.grabNote(r) != ""
+		s.render(w, "episode-row", row)
+		return
+	}
+	if hx(r) {
+		s.render(w, "release-panel", releasePanel{ShowID: id, Episode: n, Flash: flash, CSRF: s.csrfToken(w, r)})
+		return
+	}
+	http.Redirect(w, r, "/shows/"+strconv.FormatInt(id, 10), http.StatusSeeOther)
+}
+
+func (s *Server) releasePanel(showID int64, episode int, rows []pipeline.Choice, errText string) releasePanel {
+	now := time.Now()
+	note := ""
+	out := make([]choiceView, len(rows))
+	for i, row := range rows {
+		group := row.Parsed.Group
+		if group == "" {
+			group = "—"
+		}
+		res := row.Parsed.Resolution
+		if res == "" {
+			res = "—"
+		}
+		codec := strings.ToUpper(row.Parsed.Codec)
+		if codec == "" {
+			codec = "—"
+		}
+		ageUnix := int64(0)
+		if !row.Release.PubDate.IsZero() {
+			ageUnix = row.Release.PubDate.Unix()
+		}
+		out[i] = choiceView{
+			Title: row.Release.Title, InfoHash: row.Release.InfoHash,
+			Size: formatSize(row.Release.Size), Bytes: row.Release.Size,
+			Peers:   fmt.Sprintf("%d / %d", row.Release.Seeders, row.Release.Leechers),
+			Seeders: row.Release.Seeders, Leechers: row.Release.Leechers,
+			Age: formatAge(row.Release.PubDate, now), AgeUnix: ageUnix,
+			Group: group, Resolution: res, Codec: codec,
+			Score: row.Score, Reasons: strings.Join(row.Reasons, " · "),
+			Rejected: row.Rejected, Reject: row.Reject,
+		}
+	}
+	return releasePanel{
+		ShowID: showID, Episode: episode,
+		Rows: out, Error: errText, Note: note, GrabOff: note != "",
+	}
+}
+
+func showEpisode(r *http.Request) (int64, int, error) {
+	id, err := pathID(r)
+	if err != nil {
+		return 0, 0, err
+	}
+	raw := r.PathValue("n")
+	if raw == "" {
+		return id, 0, nil
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		return 0, 0, errBadID
+	}
+	return id, n, nil
+}
+
+func (s *Server) grabNote(r *http.Request) string {
+	cfg := s.current(r)
+	if s.Pipe == nil || s.Pipe.Qbit == nil || strings.TrimSpace(cfg.QBURL) == "" {
+		return "qBittorrent is not configured. Interactive search can list releases, and Grab stays off until the WebUI URL is set in Settings."
+	}
+	return ""
 }
 
 func (s *Server) postTest(w http.ResponseWriter, r *http.Request) {

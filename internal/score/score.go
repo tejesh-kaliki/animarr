@@ -3,6 +3,7 @@
 package score
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -22,39 +23,94 @@ func DefaultConfig() Config {
 	return tuning.DefaultScore()
 }
 
-// Score returns a comparable total. ok is false when the release must be skipped.
-func Score(p parser.Parsed, seeders int, preferred string, cfg Config) (int, bool) {
-	if p.Batch {
-		return 0, false
-	}
-	if seeders < cfg.MinSeeders {
-		return 0, false
-	}
+// Report is the score and the short reasons behind it.
+// Total is the quality total even when OK is false, so a rejected release can still be sorted.
+type Report struct {
+	Total  int
+	OK     bool
+	Reject string
+	Lines  []string
+}
+
+// Explain scores a release and lists why. A batch or a seeder-floor miss is not OK.
+// The automatic picker uses Score, which drops those. Interactive search shows them.
+func Explain(p parser.Parsed, seeders int, preferred string, cfg Config) Report {
 	if preferred == "" {
 		preferred = cfg.PreferredResolution
 	}
 	if preferred == "" {
 		preferred = "1080p"
 	}
-	total := resolutionScore(p.Resolution, preferred)
+	res := resolutionScore(p.Resolution, preferred)
+	var lines []string
+	switch {
+	case p.Resolution == "":
+		lines = append(lines, fmt.Sprintf("no resolution (+%d)", res))
+	case strings.EqualFold(p.Resolution, preferred):
+		lines = append(lines, fmt.Sprintf("%s matches preferred (+%d)", p.Resolution, res))
+	default:
+		lines = append(lines, fmt.Sprintf("%s instead of %s (+%d)", p.Resolution, preferred, res))
+	}
+	total := res
 	if p.Codec == "hevc" {
 		total += cfg.HEVCBonus
+		lines = append(lines, fmt.Sprintf("HEVC (+%d)", cfg.HEVCBonus))
+	} else if p.Codec != "" {
+		lines = append(lines, strings.ToUpper(p.Codec)+" (+0)")
 	}
-	total += groupScore(p.Group, cfg)
+	gs := groupScore(p.Group, cfg)
+	total += gs
+	switch {
+	case gs > 0:
+		lines = append(lines, fmt.Sprintf("%s (+%d)", p.Group, gs))
+	case strings.TrimSpace(p.Group) != "":
+		lines = append(lines, fmt.Sprintf("%s is not in the group list (+0)", p.Group))
+	}
 	if p.Dub && !p.DualAudio {
 		total -= cfg.DubPenalty
+		lines = append(lines, fmt.Sprintf("English dub (−%d)", cfg.DubPenalty))
+	} else if p.DualAudio {
+		lines = append(lines, "dual audio (+0)")
 	}
 	if p.Repack || p.Version >= 2 {
 		total += cfg.RepackBonus
+		lines = append(lines, fmt.Sprintf("repack (+%d)", cfg.RepackBonus))
 	}
 	capN := seeders
 	if capN > 50 {
 		capN = 50
 	}
+	seederPts := 0
 	if capN > 0 {
-		total += capN / 5
+		seederPts = capN / 5
 	}
-	return total, true
+	total += seederPts
+	lines = append(lines, fmt.Sprintf("%d seeders (+%d)", seeders, seederPts))
+
+	rep := Report{Total: total, OK: true, Lines: lines}
+	if p.Batch {
+		rep.OK = false
+		rep.Reject = "batch; automatic search skips packs"
+	}
+	if seeders < cfg.MinSeeders {
+		rep.OK = false
+		floor := fmt.Sprintf("%d seeders is below the floor of %d", seeders, cfg.MinSeeders)
+		if rep.Reject != "" {
+			rep.Reject += "; " + floor
+		} else {
+			rep.Reject = floor
+		}
+	}
+	return rep
+}
+
+// Score returns a comparable total. ok is false when the release must be skipped.
+func Score(p parser.Parsed, seeders int, preferred string, cfg Config) (int, bool) {
+	rep := Explain(p, seeders, preferred, cfg)
+	if !rep.OK {
+		return 0, false
+	}
+	return rep.Total, true
 }
 
 // ShouldUpgrade reports whether next should replace a file grabbed at downloadedAt.

@@ -15,6 +15,7 @@ type Parsed struct {
 	Title      string
 	Season     int
 	Episode    int
+	EpisodeEnd int // last episode of a batch range; 0 when the title names one episode or no range
 	Version    int
 	Resolution string
 	Codec      string // "hevc", "avc", or ""
@@ -29,6 +30,8 @@ var (
 	reExt          = regexp.MustCompile(`(?i)\.(?:mkv|mp4|avi|m4v)$`)
 	reBatchWord    = regexp.MustCompile(`(?i)\b(?:batch|complete)\b`)
 	reRange        = regexp.MustCompile(`(?i)(?:\bS\d{1,2}E\d{1,4}\s*[-~～]\s*E?\d{1,4}\b|\bE\d{1,4}\s*[-~～]\s*E\d{1,4}\b|(?:^|[\s\[\]\(\)._])\d{1,4}\s*[-~～]\s*\d{1,4}(?:$|[\s\[\]\(\)._])|\bseasons?\s*\d+\s*[-~～]\s*\d+\b)`)
+	reSeasonWord   = regexp.MustCompile(`(?i)season`)
+	reEpSpan       = regexp.MustCompile(`(?i)S(\d{1,2})E(\d{1,4})\s*[-~～]\s*E?(\d{1,4})|E(\d{1,4})\s*[-~～]\s*E(\d{1,4})|(?:^|[\s\[\]\(\)._])(\d{1,4})\s*[-~～]\s*(\d{1,4})(?:$|[\s\[\]\(\)._])`)
 	reBracketGroup = regexp.MustCompile(`^\[([^\]]+)\]\s*`)
 	reSceneGroup   = regexp.MustCompile(`-([A-Za-z][A-Za-z0-9]*)$`)
 	reAudio        = regexp.MustCompile(`(?i)\b(?:AAC|FLAC|OPUS|AC3|EAC3|DDP|DD)?\d\.\d\b|\b(?:5\.1|2\.0|7\.1)\b`)
@@ -103,12 +106,21 @@ func Parse(raw string) Parsed {
 	if loc := reRange.FindStringIndex(s); loc != nil {
 		p.Batch = true
 		frag := s[loc[0]:loc[1]]
-		if sm := reRangeFirst.FindStringSubmatch(frag); sm != nil {
-			if sm[1] != "" {
-				p.Season, _ = strconv.Atoi(sm[1])
-				p.Episode, _ = strconv.Atoi(sm[2])
-			} else if sm[3] != "" {
-				p.Episode, _ = strconv.Atoi(sm[3])
+		if !reSeasonWord.MatchString(frag) {
+			if season, a, b, ok := episodeSpan(frag); ok {
+				p.Season = season
+				p.Episode = a
+				p.EpisodeEnd = b
+			}
+		}
+		if p.Episode == 0 {
+			if sm := reRangeFirst.FindStringSubmatch(frag); sm != nil {
+				if sm[1] != "" {
+					p.Season, _ = strconv.Atoi(sm[1])
+					p.Episode, _ = strconv.Atoi(sm[2])
+				} else if sm[3] != "" {
+					p.Episode, _ = strconv.Atoi(sm[3])
+				}
 			}
 		}
 		s = s[:loc[0]] + " " + s[loc[1]:]
@@ -153,6 +165,30 @@ func Parse(raw string) Parsed {
 	}
 	p.Title = strings.Trim(reSpace.ReplaceAllString(s, " "), " -_.")
 	return p
+}
+
+func episodeSpan(frag string) (int, int, int, bool) {
+	m := reEpSpan.FindStringSubmatch(frag)
+	if m == nil {
+		return 0, 0, 0, false
+	}
+	season := 0
+	var a, b string
+	switch {
+	case m[2] != "":
+		season, _ = strconv.Atoi(m[1])
+		a, b = m[2], m[3]
+	case m[4] != "":
+		a, b = m[4], m[5]
+	default:
+		a, b = m[6], m[7]
+	}
+	ai, err1 := strconv.Atoi(a)
+	bi, err2 := strconv.Atoi(b)
+	if err1 != nil || err2 != nil || ai <= 0 || bi < ai {
+		return 0, 0, 0, false
+	}
+	return season, ai, bi, true
 }
 
 func normRes(s string) string {

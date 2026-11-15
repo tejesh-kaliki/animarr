@@ -324,6 +324,43 @@ func formatAirDay(t *time.Time) string {
 	return loc.Format("2 Jan 2006")
 }
 
+func formatSize(n int64) string {
+	if n <= 0 {
+		return "—"
+	}
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := int64(unit), 0
+	for v := n / unit; v >= unit && exp < 3; v /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGT"[exp])
+}
+
+func formatAge(t, now time.Time) string {
+	if t.IsZero() {
+		return "—"
+	}
+	d := now.Sub(t)
+	if d < 0 {
+		d = 0
+	}
+	when := t.Local().Format("2 Jan 2006")
+	var age string
+	switch {
+	case d < time.Hour:
+		age = fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 48*time.Hour:
+		age = fmt.Sprintf("%dh", int(d.Hours()))
+	default:
+		age = fmt.Sprintf("%dd", int(d.Hours()/24))
+	}
+	return when + " · " + age
+}
+
 func formatClock(t time.Time) string {
 	if t.IsZero() {
 		return ""

@@ -305,7 +305,15 @@ tr.ignored td { color: var(--muted); }
 .path, .release { color: var(--muted); font-size: .8rem; }
 .path { max-width: 28rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .release { margin-top: var(--s1); }
-.row-actions { display: flex; flex-wrap: nowrap; gap: .3rem; justify-content: flex-end; }
+.row-actions { display: flex; flex-wrap: wrap; gap: .3rem; justify-content: flex-end; }
+.ix-sort { background: none; border: 0; padding: 0; font-weight: 600; cursor: pointer; color: inherit; }
+.ix-row:not(:has(.ix)) { display: none; }
+.ix tr.rejected { background: rgba(255, 107, 122, .08); }
+.ix .reject { color: var(--bad); font-size: .85rem; }
+.ix .reason { font-size: .8rem; }
+.ix td.actions form { margin: 0; }
+.ix td.actions button { background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: .2rem .55rem; }
+.ix td.actions button:disabled { opacity: .45; cursor: not-allowed; }
 a.jump { display: inline-block; padding: .6rem 0; }
 .row-actions form { margin: 0; }
 .row-actions button { background: transparent; }

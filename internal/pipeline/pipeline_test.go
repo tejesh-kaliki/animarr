@@ -541,10 +541,11 @@ func TestAutomationOffBlocksSideEffectsUntilEnabled(t *testing.T) {
 	}
 
 	innerQ := &fakeQbit{}
-	innerI := &fakeIndex{recent: []indexer.Release{{
+	guarded := indexer.Release{
 		Title: "[SubsPlease] Guarded Show - 08 (1080p)", InfoHash: grabHash,
 		Magnet: "magnet:?xt=urn:btih:" + grabHash, Seeders: 9,
-	}}}
+	}
+	innerI := &fakeIndex{recent: []indexer.Release{guarded}, search: []indexer.Release{guarded}}
 	qb := &trapQbit{t: t, inner: innerQ}
 	idx := &trapIndex{t: t, inner: innerI}
 	lib := &trapLib{t: t}
@@ -561,16 +562,19 @@ func TestAutomationOffBlocksSideEffectsUntilEnabled(t *testing.T) {
 	if err := svc.PollDownloads(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if err := svc.SearchEpisode(ctx, sh.ID, 8); err == nil || err.Error() != ErrAutomationOff.Error() {
-		t.Fatalf("search: %v", err)
-	}
-	if err := svc.Redownload(ctx, sh.ID, 8); err == nil || err.Error() != "Automation is off: enable it in Settings" {
-		t.Fatalf("redownload: %v", err)
-	}
 	assertNoLibraryFiles(t, cfg.LibraryDir)
 	if len(innerQ.added) != 0 || lib.n != 0 || idx.hits != 0 {
-		t.Fatalf("side effects while off: adds %d jellyfin %d nyaa %d", len(innerQ.added), lib.n, idx.hits)
+		t.Fatalf("scheduler side effects while off: adds %d jellyfin %d nyaa %d", len(innerQ.added), lib.n, idx.hits)
 	}
+	// A show-page search is a user click. It runs while the scheduler is paused.
+	qb.allow, idx.allow = true, true
+	if err := svc.SearchEpisode(ctx, sh.ID, 8); err != nil {
+		t.Fatalf("manual search: %v", err)
+	}
+	if len(innerQ.added) != 1 || idx.hits == 0 {
+		t.Fatalf("manual search adds %d nyaa %d", len(innerQ.added), idx.hits)
+	}
+	qb.allow, idx.allow = false, false
 
 	if err := prov.Save(ctx, url.Values{config.KeyAutomationEnabled: {"true"}}); err != nil {
 		t.Fatal(err)
@@ -677,6 +681,122 @@ func (f *trapLib) Refresh(context.Context) error {
 	}
 	f.n++
 	return nil
+}
+
+func TestInteractiveSearchGrabsRejectedAndBatch(t *testing.T) {
+	st := openStore(t)
+	ctx := context.Background()
+	sh := mustShow(t, st, 44, "Interactive Show")
+	for n := 1; n <= 3; n++ {
+		if err := st.EnsureEpisode(ctx, sh.ID, n, nil, store.StateWanted); err != nil {
+			t.Fatal(err)
+		}
+	}
+	const good = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	const wrong = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	const quiet = "cccccccccccccccccccccccccccccccccccccccc"
+	const pack = "dddddddddddddddddddddddddddddddddddddddd"
+	idx := &fakeIndex{search: []indexer.Release{
+		{Title: "[SubsPlease] Interactive Show - 01 (1080p)", InfoHash: good, Magnet: "magnet:?xt=urn:btih:" + good, Seeders: 40, Leechers: 2, Size: 1400 << 20, PubDate: time.Now().Add(-2 * time.Hour)},
+		{Title: "[SubsPlease] Interactive Show - 02 (1080p)", InfoHash: wrong, Magnet: "magnet:?xt=urn:btih:" + wrong, Seeders: 30, Leechers: 1, Size: 1400 << 20},
+		{Title: "[SubsPlease] Interactive Show - 01 (720p)", InfoHash: quiet, Magnet: "magnet:?xt=urn:btih:" + quiet, Seeders: 0, Leechers: 0, Size: 700 << 20},
+		{Title: "[Erai-raws] Interactive Show - 01-03 (1080p)", InfoHash: pack, Magnet: "magnet:?xt=urn:btih:" + pack, Seeders: 15, Leechers: 4, Size: 4 << 30},
+		{Title: "[SubsPlease] Some Other Series - 01 (1080p)", InfoHash: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", Magnet: "magnet:?xt=urn:btih:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", Seeders: 50},
+	}}
+	qb := &fakeQbit{}
+	cfg := testCfg(t.TempDir())
+	cfg.AutomationEnabled = false
+	cfg.QBURL = "http://127.0.0.1:8080"
+	svc := &Service{
+		Config: cfg, Store: st, Indexer: idx, Qbit: qb,
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	rows, err := svc.ListChoices(ctx, sh.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 5 {
+		t.Fatalf("rows %d", len(rows))
+	}
+	if rows[0].Score < rows[len(rows)-1].Score {
+		t.Fatalf("not sorted by score: %+v", rows)
+	}
+	var sawWrong, sawQuiet, sawPack, sawTitle bool
+	for _, row := range rows {
+		switch row.Release.InfoHash {
+		case good:
+			if row.Rejected {
+				t.Fatalf("good release rejected: %s", row.Reject)
+			}
+			if !strings.Contains(strings.Join(row.Reasons, " "), "1080p") || !strings.Contains(strings.Join(row.Reasons, " "), "SubsPlease") {
+				t.Fatalf("reasons %v", row.Reasons)
+			}
+		case wrong:
+			sawWrong = true
+			if !row.Rejected || !strings.Contains(row.Reject, "wrong episode") {
+				t.Fatalf("wrong episode %+v", row.Reject)
+			}
+		case quiet:
+			sawQuiet = true
+			if !row.Rejected || !strings.Contains(row.Reject, "floor") {
+				t.Fatalf("seeders %+v", row.Reject)
+			}
+		case pack:
+			sawPack = true
+			if !row.Rejected || !strings.Contains(row.Reject, "batch") {
+				t.Fatalf("batch %+v", row.Reject)
+			}
+		default:
+			sawTitle = true
+			if !row.Rejected || !strings.Contains(row.Reject, "title did not match") {
+				t.Fatalf("title %+v", row.Reject)
+			}
+		}
+	}
+	if !sawWrong || !sawQuiet || !sawPack || !sawTitle {
+		t.Fatal("missing a rejected class")
+	}
+
+	if err := svc.GrabChoice(ctx, sh.ID, 1, quiet); err != nil {
+		t.Fatal(err)
+	}
+	if len(qb.added) != 1 {
+		t.Fatalf("adds %d", len(qb.added))
+	}
+	got, err := st.GetEpisode(ctx, sh.ID, 1)
+	if err != nil || got.State != store.StateDownloading || !strings.EqualFold(got.InfoHash, quiet) {
+		t.Fatalf("ep1 %+v %v", got, err)
+	}
+	dls, err := st.ListDownloadsByState(ctx, []string{store.DlDownloading})
+	if err != nil || len(dls) != 1 || dls[0].Episode != 1 {
+		t.Fatalf("downloads %+v %v", dls, err)
+	}
+
+	if err := svc.GrabChoice(ctx, sh.ID, 0, pack); err != nil {
+		t.Fatal(err)
+	}
+	if len(qb.added) != 2 {
+		t.Fatalf("batch adds %d", len(qb.added))
+	}
+	for _, n := range []int{1, 2, 3} {
+		ep, err := st.GetEpisode(ctx, sh.ID, n)
+		if err != nil || ep.State != store.StateDownloading || !strings.EqualFold(ep.InfoHash, pack) {
+			t.Fatalf("ep %d %+v %v", n, ep, err)
+		}
+	}
+	dls, err = st.ListDownloadsByState(ctx, []string{store.DlDownloading})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var packN int
+	for _, d := range dls {
+		if strings.EqualFold(d.InfoHash, pack) {
+			packN++
+		}
+	}
+	if packN != 3 {
+		t.Fatalf("pack downloads %d of %+v", packN, dls)
+	}
 }
 
 func mustShow(t *testing.T, st *store.Store, id int, title string) store.Show {

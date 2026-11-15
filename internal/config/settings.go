@@ -503,7 +503,7 @@ func formatDuration(d time.Duration) string {
 }
 
 var specs = []Spec{
-	{Key: KeyAutomationEnabled, Label: "Automation", Help: "Off until you turn it on. AniList sync and these pages keep working. Searches, grabs, imports, NFO writes, and Jellyfin refresh do not.", Group: "Automation", Kind: KindBool, Options: []string{"true", "false"}},
+	{Key: KeyAutomationEnabled, Label: "Automation", Help: "Off until you turn it on. Scheduled Nyaa search and automatic grabs stay off. Search, Re-download, Interactive search, and Grab on a show still run. The download poll, which imports files, writes NFO, and refreshes Jellyfin, stays paused until this is on.", Group: "Automation", Kind: KindBool, Options: []string{"true", "false"}},
 
 	{Key: KeyAniListUsername, Label: "Username", Help: "Public AniList user. Empty skips the scheduled sync.", Group: "AniList", Kind: KindText, AllowEmpty: true},
 	{Key: KeyAniListToken, Label: "Token", Help: "Optional. Leave blank to keep the current token. Stored encrypted.", Group: "AniList", Kind: KindSecret, AllowEmpty: true},
