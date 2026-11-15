@@ -14,12 +14,12 @@ func TestShowEpisodeRoundTrip(t *testing.T) {
 	sh, err := s.UpsertShow(ctx, Show{
 		AniListID: 10, TitleRomaji: "Title", TitleEnglish: "English Title", Synonyms: []string{"Alt"},
 		Format: "TV", Status: "RELEASING", ListStatus: "CURRENT", Episodes: 2, Monitored: true,
-		NextAiringAt: &air, CoverImage: "http://img", Season: "WINTER", SeasonYear: 2024, StartYear: 2024,
+		NextAiringAt: &air, CoverImage: "http://img", Season: "WINTER", SeasonYear: 2024, StartYear: 2024, StartMonth: 1, StartDay: 5,
 	}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sh.ID == 0 || !sh.Monitored || sh.DisplayTitle() != "English Title" {
+	if sh.ID == 0 || !sh.Monitored || sh.DisplayTitle() != "English Title" || sh.StartMonth != 1 || sh.StartDay != 5 {
 		t.Fatalf("%+v", sh)
 	}
 	past := time.Now().Add(-time.Hour)

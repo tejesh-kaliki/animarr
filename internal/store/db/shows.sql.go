@@ -24,12 +24,12 @@ func (q *Queries) CountShows(ctx context.Context) (int64, error) {
 }
 
 const getShow = `-- name: GetShow :one
-SELECT id, anilist_id, title_romaji, title_english, title_native, synonyms, format, status, list_status, episodes, next_airing_episode, next_airing_at, cover_image, season, season_year, start_year, monitored, preferred_resolution, relations_json, created_at, updated_at, description, genres, studio, franchise_id, season_number FROM shows WHERE id = ?
+SELECT id, anilist_id, title_romaji, title_english, title_native, synonyms, format, status, list_status, episodes, next_airing_episode, next_airing_at, cover_image, season, season_year, start_year, monitored, preferred_resolution, relations_json, created_at, updated_at, description, genres, studio, franchise_id, season_number, start_month, start_day FROM shows WHERE id = ?
 `
 
 // GetShow
 //
-//	SELECT id, anilist_id, title_romaji, title_english, title_native, synonyms, format, status, list_status, episodes, next_airing_episode, next_airing_at, cover_image, season, season_year, start_year, monitored, preferred_resolution, relations_json, created_at, updated_at, description, genres, studio, franchise_id, season_number FROM shows WHERE id = ?
+//	SELECT id, anilist_id, title_romaji, title_english, title_native, synonyms, format, status, list_status, episodes, next_airing_episode, next_airing_at, cover_image, season, season_year, start_year, monitored, preferred_resolution, relations_json, created_at, updated_at, description, genres, studio, franchise_id, season_number, start_month, start_day FROM shows WHERE id = ?
 func (q *Queries) GetShow(ctx context.Context, id int64) (Show, error) {
 	row := q.db.QueryRowContext(ctx, getShow, id)
 	var i Show
@@ -60,17 +60,19 @@ func (q *Queries) GetShow(ctx context.Context, id int64) (Show, error) {
 		&i.Studio,
 		&i.FranchiseID,
 		&i.SeasonNumber,
+		&i.StartMonth,
+		&i.StartDay,
 	)
 	return i, err
 }
 
 const getShowByAniList = `-- name: GetShowByAniList :one
-SELECT id, anilist_id, title_romaji, title_english, title_native, synonyms, format, status, list_status, episodes, next_airing_episode, next_airing_at, cover_image, season, season_year, start_year, monitored, preferred_resolution, relations_json, created_at, updated_at, description, genres, studio, franchise_id, season_number FROM shows WHERE anilist_id = ?
+SELECT id, anilist_id, title_romaji, title_english, title_native, synonyms, format, status, list_status, episodes, next_airing_episode, next_airing_at, cover_image, season, season_year, start_year, monitored, preferred_resolution, relations_json, created_at, updated_at, description, genres, studio, franchise_id, season_number, start_month, start_day FROM shows WHERE anilist_id = ?
 `
 
 // GetShowByAniList
 //
-//	SELECT id, anilist_id, title_romaji, title_english, title_native, synonyms, format, status, list_status, episodes, next_airing_episode, next_airing_at, cover_image, season, season_year, start_year, monitored, preferred_resolution, relations_json, created_at, updated_at, description, genres, studio, franchise_id, season_number FROM shows WHERE anilist_id = ?
+//	SELECT id, anilist_id, title_romaji, title_english, title_native, synonyms, format, status, list_status, episodes, next_airing_episode, next_airing_at, cover_image, season, season_year, start_year, monitored, preferred_resolution, relations_json, created_at, updated_at, description, genres, studio, franchise_id, season_number, start_month, start_day FROM shows WHERE anilist_id = ?
 func (q *Queries) GetShowByAniList(ctx context.Context, anilistID int64) (Show, error) {
 	row := q.db.QueryRowContext(ctx, getShowByAniList, anilistID)
 	var i Show
@@ -101,6 +103,8 @@ func (q *Queries) GetShowByAniList(ctx context.Context, anilistID int64) (Show, 
 		&i.Studio,
 		&i.FranchiseID,
 		&i.SeasonNumber,
+		&i.StartMonth,
+		&i.StartDay,
 	)
 	return i, err
 }
@@ -109,15 +113,15 @@ const insertShow = `-- name: InsertShow :one
 INSERT INTO shows (
     anilist_id, title_romaji, title_english, title_native, synonyms,
     format, status, list_status, episodes, next_airing_episode, next_airing_at,
-    cover_image, season, season_year, start_year, monitored, preferred_resolution,
+    cover_image, season, season_year, start_year, start_month, start_day, monitored, preferred_resolution,
     relations_json, created_at, updated_at, description, genres, studio
 ) VALUES (
     ?1, ?2, ?3, ?4, ?5,
     ?6, ?7, ?8, ?9, ?10, ?11,
-    ?12, ?13, ?14, ?15, ?16, ?17,
-    ?18, ?19, ?20, ?21, ?22, ?23
+    ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19,
+    ?20, ?21, ?22, ?23, ?24, ?25
 )
-RETURNING id, anilist_id, title_romaji, title_english, title_native, synonyms, format, status, list_status, episodes, next_airing_episode, next_airing_at, cover_image, season, season_year, start_year, monitored, preferred_resolution, relations_json, created_at, updated_at, description, genres, studio, franchise_id, season_number
+RETURNING id, anilist_id, title_romaji, title_english, title_native, synonyms, format, status, list_status, episodes, next_airing_episode, next_airing_at, cover_image, season, season_year, start_year, monitored, preferred_resolution, relations_json, created_at, updated_at, description, genres, studio, franchise_id, season_number, start_month, start_day
 `
 
 type InsertShowParams struct {
@@ -136,6 +140,8 @@ type InsertShowParams struct {
 	Season              string
 	SeasonYear          int64
 	StartYear           int64
+	StartMonth          int64
+	StartDay            int64
 	Monitored           Bool
 	PreferredResolution string
 	RelationsJson       string
@@ -151,15 +157,15 @@ type InsertShowParams struct {
 //	INSERT INTO shows (
 //	    anilist_id, title_romaji, title_english, title_native, synonyms,
 //	    format, status, list_status, episodes, next_airing_episode, next_airing_at,
-//	    cover_image, season, season_year, start_year, monitored, preferred_resolution,
+//	    cover_image, season, season_year, start_year, start_month, start_day, monitored, preferred_resolution,
 //	    relations_json, created_at, updated_at, description, genres, studio
 //	) VALUES (
 //	    ?1, ?2, ?3, ?4, ?5,
 //	    ?6, ?7, ?8, ?9, ?10, ?11,
-//	    ?12, ?13, ?14, ?15, ?16, ?17,
-//	    ?18, ?19, ?20, ?21, ?22, ?23
+//	    ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19,
+//	    ?20, ?21, ?22, ?23, ?24, ?25
 //	)
-//	RETURNING id, anilist_id, title_romaji, title_english, title_native, synonyms, format, status, list_status, episodes, next_airing_episode, next_airing_at, cover_image, season, season_year, start_year, monitored, preferred_resolution, relations_json, created_at, updated_at, description, genres, studio, franchise_id, season_number
+//	RETURNING id, anilist_id, title_romaji, title_english, title_native, synonyms, format, status, list_status, episodes, next_airing_episode, next_airing_at, cover_image, season, season_year, start_year, monitored, preferred_resolution, relations_json, created_at, updated_at, description, genres, studio, franchise_id, season_number, start_month, start_day
 func (q *Queries) InsertShow(ctx context.Context, arg InsertShowParams) (Show, error) {
 	row := q.db.QueryRowContext(ctx, insertShow,
 		arg.AnilistID,
@@ -177,6 +183,8 @@ func (q *Queries) InsertShow(ctx context.Context, arg InsertShowParams) (Show, e
 		arg.Season,
 		arg.SeasonYear,
 		arg.StartYear,
+		arg.StartMonth,
+		arg.StartDay,
 		arg.Monitored,
 		arg.PreferredResolution,
 		arg.RelationsJson,
@@ -214,12 +222,14 @@ func (q *Queries) InsertShow(ctx context.Context, arg InsertShowParams) (Show, e
 		&i.Studio,
 		&i.FranchiseID,
 		&i.SeasonNumber,
+		&i.StartMonth,
+		&i.StartDay,
 	)
 	return i, err
 }
 
 const listShows = `-- name: ListShows :many
-SELECT shows.id, shows.anilist_id, shows.title_romaji, shows.title_english, shows.title_native, shows.synonyms, shows.format, shows.status, shows.list_status, shows.episodes, shows.next_airing_episode, shows.next_airing_at, shows.cover_image, shows.season, shows.season_year, shows.start_year, shows.monitored, shows.preferred_resolution, shows.relations_json, shows.created_at, shows.updated_at, shows.description, shows.genres, shows.studio, shows.franchise_id, shows.season_number,
+SELECT shows.id, shows.anilist_id, shows.title_romaji, shows.title_english, shows.title_native, shows.synonyms, shows.format, shows.status, shows.list_status, shows.episodes, shows.next_airing_episode, shows.next_airing_at, shows.cover_image, shows.season, shows.season_year, shows.start_year, shows.monitored, shows.preferred_resolution, shows.relations_json, shows.created_at, shows.updated_at, shows.description, shows.genres, shows.studio, shows.franchise_id, shows.season_number, shows.start_month, shows.start_day,
     (SELECT COUNT(*) FROM episodes e WHERE e.show_id = shows.id) AS total_eps,
     (SELECT COUNT(*) FROM episodes e WHERE e.show_id = shows.id AND e.state = 'downloaded') AS downloaded
 FROM shows
@@ -253,13 +263,15 @@ type ListShowsRow struct {
 	Studio              string
 	FranchiseID         int64
 	SeasonNumber        int64
+	StartMonth          int64
+	StartDay            int64
 	TotalEps            int64
 	Downloaded          int64
 }
 
 // ListShows
 //
-//	SELECT shows.id, shows.anilist_id, shows.title_romaji, shows.title_english, shows.title_native, shows.synonyms, shows.format, shows.status, shows.list_status, shows.episodes, shows.next_airing_episode, shows.next_airing_at, shows.cover_image, shows.season, shows.season_year, shows.start_year, shows.monitored, shows.preferred_resolution, shows.relations_json, shows.created_at, shows.updated_at, shows.description, shows.genres, shows.studio, shows.franchise_id, shows.season_number,
+//	SELECT shows.id, shows.anilist_id, shows.title_romaji, shows.title_english, shows.title_native, shows.synonyms, shows.format, shows.status, shows.list_status, shows.episodes, shows.next_airing_episode, shows.next_airing_at, shows.cover_image, shows.season, shows.season_year, shows.start_year, shows.monitored, shows.preferred_resolution, shows.relations_json, shows.created_at, shows.updated_at, shows.description, shows.genres, shows.studio, shows.franchise_id, shows.season_number, shows.start_month, shows.start_day,
 //	    (SELECT COUNT(*) FROM episodes e WHERE e.show_id = shows.id) AS total_eps,
 //	    (SELECT COUNT(*) FROM episodes e WHERE e.show_id = shows.id AND e.state = 'downloaded') AS downloaded
 //	FROM shows
@@ -300,6 +312,8 @@ func (q *Queries) ListShows(ctx context.Context) ([]ListShowsRow, error) {
 			&i.Studio,
 			&i.FranchiseID,
 			&i.SeasonNumber,
+			&i.StartMonth,
+			&i.StartDay,
 			&i.TotalEps,
 			&i.Downloaded,
 		); err != nil {
@@ -317,7 +331,7 @@ func (q *Queries) ListShows(ctx context.Context) ([]ListShowsRow, error) {
 }
 
 const listShowsAiring = `-- name: ListShowsAiring :many
-SELECT shows.id, shows.anilist_id, shows.title_romaji, shows.title_english, shows.title_native, shows.synonyms, shows.format, shows.status, shows.list_status, shows.episodes, shows.next_airing_episode, shows.next_airing_at, shows.cover_image, shows.season, shows.season_year, shows.start_year, shows.monitored, shows.preferred_resolution, shows.relations_json, shows.created_at, shows.updated_at, shows.description, shows.genres, shows.studio, shows.franchise_id, shows.season_number,
+SELECT shows.id, shows.anilist_id, shows.title_romaji, shows.title_english, shows.title_native, shows.synonyms, shows.format, shows.status, shows.list_status, shows.episodes, shows.next_airing_episode, shows.next_airing_at, shows.cover_image, shows.season, shows.season_year, shows.start_year, shows.monitored, shows.preferred_resolution, shows.relations_json, shows.created_at, shows.updated_at, shows.description, shows.genres, shows.studio, shows.franchise_id, shows.season_number, shows.start_month, shows.start_day,
     (SELECT COUNT(*) FROM episodes e WHERE e.show_id = shows.id) AS total_eps,
     (SELECT COUNT(*) FROM episodes e WHERE e.show_id = shows.id AND e.state = 'downloaded') AS downloaded
 FROM shows
@@ -352,13 +366,15 @@ type ListShowsAiringRow struct {
 	Studio              string
 	FranchiseID         int64
 	SeasonNumber        int64
+	StartMonth          int64
+	StartDay            int64
 	TotalEps            int64
 	Downloaded          int64
 }
 
 // ListShowsAiring
 //
-//	SELECT shows.id, shows.anilist_id, shows.title_romaji, shows.title_english, shows.title_native, shows.synonyms, shows.format, shows.status, shows.list_status, shows.episodes, shows.next_airing_episode, shows.next_airing_at, shows.cover_image, shows.season, shows.season_year, shows.start_year, shows.monitored, shows.preferred_resolution, shows.relations_json, shows.created_at, shows.updated_at, shows.description, shows.genres, shows.studio, shows.franchise_id, shows.season_number,
+//	SELECT shows.id, shows.anilist_id, shows.title_romaji, shows.title_english, shows.title_native, shows.synonyms, shows.format, shows.status, shows.list_status, shows.episodes, shows.next_airing_episode, shows.next_airing_at, shows.cover_image, shows.season, shows.season_year, shows.start_year, shows.monitored, shows.preferred_resolution, shows.relations_json, shows.created_at, shows.updated_at, shows.description, shows.genres, shows.studio, shows.franchise_id, shows.season_number, shows.start_month, shows.start_day,
 //	    (SELECT COUNT(*) FROM episodes e WHERE e.show_id = shows.id) AS total_eps,
 //	    (SELECT COUNT(*) FROM episodes e WHERE e.show_id = shows.id AND e.state = 'downloaded') AS downloaded
 //	FROM shows
@@ -400,6 +416,8 @@ func (q *Queries) ListShowsAiring(ctx context.Context, nextAiringAt NullUnixTime
 			&i.Studio,
 			&i.FranchiseID,
 			&i.SeasonNumber,
+			&i.StartMonth,
+			&i.StartDay,
 			&i.TotalEps,
 			&i.Downloaded,
 		); err != nil {
@@ -417,7 +435,7 @@ func (q *Queries) ListShowsAiring(ctx context.Context, nextAiringAt NullUnixTime
 }
 
 const listShowsMonitored = `-- name: ListShowsMonitored :many
-SELECT shows.id, shows.anilist_id, shows.title_romaji, shows.title_english, shows.title_native, shows.synonyms, shows.format, shows.status, shows.list_status, shows.episodes, shows.next_airing_episode, shows.next_airing_at, shows.cover_image, shows.season, shows.season_year, shows.start_year, shows.monitored, shows.preferred_resolution, shows.relations_json, shows.created_at, shows.updated_at, shows.description, shows.genres, shows.studio, shows.franchise_id, shows.season_number,
+SELECT shows.id, shows.anilist_id, shows.title_romaji, shows.title_english, shows.title_native, shows.synonyms, shows.format, shows.status, shows.list_status, shows.episodes, shows.next_airing_episode, shows.next_airing_at, shows.cover_image, shows.season, shows.season_year, shows.start_year, shows.monitored, shows.preferred_resolution, shows.relations_json, shows.created_at, shows.updated_at, shows.description, shows.genres, shows.studio, shows.franchise_id, shows.season_number, shows.start_month, shows.start_day,
     (SELECT COUNT(*) FROM episodes e WHERE e.show_id = shows.id) AS total_eps,
     (SELECT COUNT(*) FROM episodes e WHERE e.show_id = shows.id AND e.state = 'downloaded') AS downloaded
 FROM shows
@@ -452,13 +470,15 @@ type ListShowsMonitoredRow struct {
 	Studio              string
 	FranchiseID         int64
 	SeasonNumber        int64
+	StartMonth          int64
+	StartDay            int64
 	TotalEps            int64
 	Downloaded          int64
 }
 
 // ListShowsMonitored
 //
-//	SELECT shows.id, shows.anilist_id, shows.title_romaji, shows.title_english, shows.title_native, shows.synonyms, shows.format, shows.status, shows.list_status, shows.episodes, shows.next_airing_episode, shows.next_airing_at, shows.cover_image, shows.season, shows.season_year, shows.start_year, shows.monitored, shows.preferred_resolution, shows.relations_json, shows.created_at, shows.updated_at, shows.description, shows.genres, shows.studio, shows.franchise_id, shows.season_number,
+//	SELECT shows.id, shows.anilist_id, shows.title_romaji, shows.title_english, shows.title_native, shows.synonyms, shows.format, shows.status, shows.list_status, shows.episodes, shows.next_airing_episode, shows.next_airing_at, shows.cover_image, shows.season, shows.season_year, shows.start_year, shows.monitored, shows.preferred_resolution, shows.relations_json, shows.created_at, shows.updated_at, shows.description, shows.genres, shows.studio, shows.franchise_id, shows.season_number, shows.start_month, shows.start_day,
 //	    (SELECT COUNT(*) FROM episodes e WHERE e.show_id = shows.id) AS total_eps,
 //	    (SELECT COUNT(*) FROM episodes e WHERE e.show_id = shows.id AND e.state = 'downloaded') AS downloaded
 //	FROM shows
@@ -500,6 +520,8 @@ func (q *Queries) ListShowsMonitored(ctx context.Context) ([]ListShowsMonitoredR
 			&i.Studio,
 			&i.FranchiseID,
 			&i.SeasonNumber,
+			&i.StartMonth,
+			&i.StartDay,
 			&i.TotalEps,
 			&i.Downloaded,
 		); err != nil {
@@ -605,14 +627,16 @@ UPDATE shows SET
     season = ?12,
     season_year = ?13,
     start_year = ?14,
-    monitored = ?15,
-    preferred_resolution = ?16,
-    relations_json = ?17,
-    description = ?18,
-    genres = ?19,
-    studio = ?20,
-    updated_at = ?21
-WHERE id = ?22
+    start_month = ?15,
+    start_day = ?16,
+    monitored = ?17,
+    preferred_resolution = ?18,
+    relations_json = ?19,
+    description = ?20,
+    genres = ?21,
+    studio = ?22,
+    updated_at = ?23
+WHERE id = ?24
 `
 
 type UpdateShowParams struct {
@@ -630,6 +654,8 @@ type UpdateShowParams struct {
 	Season              string
 	SeasonYear          int64
 	StartYear           int64
+	StartMonth          int64
+	StartDay            int64
 	Monitored           Bool
 	PreferredResolution string
 	RelationsJson       string
@@ -657,14 +683,16 @@ type UpdateShowParams struct {
 //	    season = ?12,
 //	    season_year = ?13,
 //	    start_year = ?14,
-//	    monitored = ?15,
-//	    preferred_resolution = ?16,
-//	    relations_json = ?17,
-//	    description = ?18,
-//	    genres = ?19,
-//	    studio = ?20,
-//	    updated_at = ?21
-//	WHERE id = ?22
+//	    start_month = ?15,
+//	    start_day = ?16,
+//	    monitored = ?17,
+//	    preferred_resolution = ?18,
+//	    relations_json = ?19,
+//	    description = ?20,
+//	    genres = ?21,
+//	    studio = ?22,
+//	    updated_at = ?23
+//	WHERE id = ?24
 func (q *Queries) UpdateShow(ctx context.Context, arg UpdateShowParams) error {
 	_, err := q.db.ExecContext(ctx, updateShow,
 		arg.TitleRomaji,
@@ -681,6 +709,8 @@ func (q *Queries) UpdateShow(ctx context.Context, arg UpdateShowParams) error {
 		arg.Season,
 		arg.SeasonYear,
 		arg.StartYear,
+		arg.StartMonth,
+		arg.StartDay,
 		arg.Monitored,
 		arg.PreferredResolution,
 		arg.RelationsJson,

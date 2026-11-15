@@ -2,12 +2,12 @@
 INSERT INTO shows (
     anilist_id, title_romaji, title_english, title_native, synonyms,
     format, status, list_status, episodes, next_airing_episode, next_airing_at,
-    cover_image, season, season_year, start_year, monitored, preferred_resolution,
+    cover_image, season, season_year, start_year, start_month, start_day, monitored, preferred_resolution,
     relations_json, created_at, updated_at, description, genres, studio
 ) VALUES (
     sqlc.arg(anilist_id), sqlc.arg(title_romaji), sqlc.arg(title_english), sqlc.arg(title_native), sqlc.arg(synonyms),
     sqlc.arg(format), sqlc.arg(status), sqlc.arg(list_status), sqlc.arg(episodes), sqlc.arg(next_airing_episode), sqlc.arg(next_airing_at),
-    sqlc.arg(cover_image), sqlc.arg(season), sqlc.arg(season_year), sqlc.arg(start_year), sqlc.arg(monitored), sqlc.arg(preferred_resolution),
+    sqlc.arg(cover_image), sqlc.arg(season), sqlc.arg(season_year), sqlc.arg(start_year), sqlc.arg(start_month), sqlc.arg(start_day), sqlc.arg(monitored), sqlc.arg(preferred_resolution),
     sqlc.arg(relations_json), sqlc.arg(created_at), sqlc.arg(updated_at), sqlc.arg(description), sqlc.arg(genres), sqlc.arg(studio)
 )
 RETURNING *;
@@ -28,6 +28,8 @@ UPDATE shows SET
     season = sqlc.arg(season),
     season_year = sqlc.arg(season_year),
     start_year = sqlc.arg(start_year),
+    start_month = sqlc.arg(start_month),
+    start_day = sqlc.arg(start_day),
     monitored = sqlc.arg(monitored),
     preferred_resolution = sqlc.arg(preferred_resolution),
     relations_json = sqlc.arg(relations_json),

@@ -34,6 +34,8 @@ func fromDBShow(row db.Show) Show {
 		Season:              row.Season,
 		SeasonYear:          int(row.SeasonYear),
 		StartYear:           int(row.StartYear),
+		StartMonth:          int(row.StartMonth),
+		StartDay:            int(row.StartDay),
 		Monitored:           bool(row.Monitored),
 		PreferredResolution: row.PreferredResolution,
 		RelationsJSON:       row.RelationsJson,
@@ -49,12 +51,12 @@ func fromDBShow(row db.Show) Show {
 	return sh
 }
 
-func showFromList(id int64, anilistID int64, romaji, english, native, synonyms, format, status, listStatus string, episodes, nextEp int64, next db.NullUnixTime, cover, season string, seasonYear, startYear int64, monitored db.Bool, resolution, relations string, created, updated db.UnixTime, description, genres, studio string, franchiseID, seasonNumber, total, downloaded int64) Show {
+func showFromList(id int64, anilistID int64, romaji, english, native, synonyms, format, status, listStatus string, episodes, nextEp int64, next db.NullUnixTime, cover, season string, seasonYear, startYear, startMonth, startDay int64, monitored db.Bool, resolution, relations string, created, updated db.UnixTime, description, genres, studio string, franchiseID, seasonNumber, total, downloaded int64) Show {
 	sh := fromDBShow(db.Show{
 		ID: id, AnilistID: anilistID, TitleRomaji: romaji, TitleEnglish: english, TitleNative: native,
 		Synonyms: synonyms, Format: format, Status: status, ListStatus: listStatus,
 		Episodes: episodes, NextAiringEpisode: nextEp, NextAiringAt: next, CoverImage: cover,
-		Season: season, SeasonYear: seasonYear, StartYear: startYear, Monitored: monitored,
+		Season: season, SeasonYear: seasonYear, StartYear: startYear, StartMonth: startMonth, StartDay: startDay, Monitored: monitored,
 		PreferredResolution: resolution, RelationsJson: relations, CreatedAt: created, UpdatedAt: updated,
 		Description: description, Genres: genres, Studio: studio, FranchiseID: franchiseID, SeasonNumber: seasonNumber,
 	})
@@ -80,6 +82,8 @@ func insertShowParams(sh Show, now time.Time) db.InsertShowParams {
 		Season:              sh.Season,
 		SeasonYear:          int64(sh.SeasonYear),
 		StartYear:           int64(sh.StartYear),
+		StartMonth:          int64(sh.StartMonth),
+		StartDay:            int64(sh.StartDay),
 		Monitored:           db.Bool(sh.Monitored),
 		PreferredResolution: sh.PreferredResolution,
 		RelationsJson:       emptyJSON(sh.RelationsJSON),
@@ -107,6 +111,8 @@ func updateShowParams(sh Show, now time.Time) db.UpdateShowParams {
 		Season:              sh.Season,
 		SeasonYear:          int64(sh.SeasonYear),
 		StartYear:           int64(sh.StartYear),
+		StartMonth:          int64(sh.StartMonth),
+		StartDay:            int64(sh.StartDay),
 		Monitored:           db.Bool(sh.Monitored),
 		PreferredResolution: sh.PreferredResolution,
 		RelationsJson:       emptyJSON(sh.RelationsJSON),

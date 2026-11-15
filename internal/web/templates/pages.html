@@ -22,12 +22,13 @@
   </nav>
 </header>
 <main id="main" class="wrap">
-{{if .AutomationOff}}<p class="banner"><strong>Automation is off.</strong> Nothing is searched or downloaded. {{if eq .Nav "settings"}}<a href="#g-automation">Turn it on below</a>{{else}}<a href="/settings">Turn on in Settings</a>{{end}}</p>{{end}}
+{{if .AutomationOff}}<p class="banner"><strong>Automation is off.</strong> Scheduled search and grabs are paused. Buttons on a show still search and download. {{if eq .Nav "settings"}}<a href="#g-automation">Turn it on below</a>{{else}}<a href="/settings">Turn on in Settings</a>{{end}}</p>{{end}}
 {{if and .Error (ne .Body "settings")}}<p class="error">{{template "ico" "triangle-fill"}}{{.Error}}</p>{{end}}
 {{if .Flash}}<p class="flash">{{template "ico" "check"}}{{.Flash}}</p>{{end}}
 {{if eq .Body "dashboard"}}{{template "dashboard" .}}{{end}}
 {{if eq .Body "shows"}}{{template "shows" .}}{{end}}
 {{if eq .Body "show"}}{{template "show" .}}{{end}}
+{{if eq .Body "franchise"}}{{template "franchise" .}}{{end}}
 {{if eq .Body "search"}}{{template "search" .}}{{end}}
 {{if eq .Body "activity"}}{{template "activity" .}}{{end}}
 {{if eq .Body "settings"}}{{template "settings" .}}{{end}}
@@ -39,6 +40,29 @@ document.body.addEventListener("htmx:beforeRequest", function (e) {
 });
 document.body.addEventListener("htmx:afterRequest", function (e) {
   if (e.detail && e.detail.elt) e.detail.elt.removeAttribute("aria-busy");
+});
+document.body.addEventListener("click", function (e) {
+  var btn = e.target.closest && e.target.closest(".ix-sort");
+  if (!btn) return;
+  var table = btn.closest("table");
+  var tbody = table && table.querySelector("tbody");
+  if (!tbody) return;
+  var key = btn.dataset.key;
+  var numeric = btn.dataset.type === "num";
+  var desc = btn.dataset.dir !== "desc";
+  table.querySelectorAll(".ix-sort").forEach(function (b) { b.dataset.dir = ""; });
+  btn.dataset.dir = desc ? "desc" : "asc";
+  var rows = Array.prototype.slice.call(tbody.querySelectorAll("tr"));
+  rows.sort(function (a, b) {
+    var av = a.dataset[key] || "";
+    var bv = b.dataset[key] || "";
+    if (numeric) {
+      var an = parseFloat(av) || 0, bn = parseFloat(bv) || 0;
+      return desc ? bn - an : an - bn;
+    }
+    return desc ? bv.localeCompare(av) : av.localeCompare(bv);
+  });
+  rows.forEach(function (row) { tbody.appendChild(row); });
 });
 (function () {
   var form = document.getElementById("settings-form");
@@ -188,47 +212,62 @@ document.body.addEventListener("htmx:afterRequest", function (e) {
     <button class="btn" type="submit">Sort</button>
   </form>
 </div>
-{{if not .Cards}}<p class="empty">No shows in this filter. Sync AniList or add one from Search.</p>{{end}}
-{{range .Groups}}
-<section class="franchise">
-  <h2>{{.Title}} <span class="muted">{{len .Cards}} entries · {{.Downloaded}}/{{.TotalEps}} episodes</span></h2>
-  <div class="grid">
-{{range .Cards}}
-  <article class="card">
-    <a class="poster" href="/shows/{{.ID}}" tabindex="-1" aria-hidden="true">
-      {{if .CoverImage}}<img src="{{.CoverImage}}" alt="">{{else}}<span class="ph">{{letter (.DisplayTitle)}}</span>{{end}}
-      <span class="progress">{{.Downloaded}}/{{.TotalEps}}</span>
-      {{if gt .Missing 0}}<span class="newflag">{{.Missing}} missing</span>{{end}}
-    </a>
-    {{if gt .ProgressPct 0}}<div class="bar"><span style="width: {{.ProgressPct}}%"></span></div>{{end}}
-    <div class="meta">
-      <a href="/shows/{{.ID}}" title="{{.DisplayTitle}}">{{.DisplayTitle}}</a>
-      <p class="muted">{{.NextLine}}</p>
-    </div>
-  </article>
-{{end}}
-  </div>
-</section>
-{{end}}
-{{if .Singles}}
-{{if .Groups}}<h2 class="franchise-other">Other shows</h2>{{end}}
+{{if not .Grid}}<p class="empty">No shows in this filter. Sync AniList or add one from Search.</p>{{end}}
+{{if .Grid}}
 <div class="grid">
-{{range .Singles}}
+{{range .Grid}}
   <article class="card">
-    <a class="poster" href="/shows/{{.ID}}" tabindex="-1" aria-hidden="true">
+    <a class="poster" href="{{.Href}}" tabindex="-1" aria-hidden="true">
       {{if .CoverImage}}<img src="{{.CoverImage}}" alt="">{{else}}<span class="ph">{{letter (.DisplayTitle)}}</span>{{end}}
       <span class="progress">{{.Downloaded}}/{{.TotalEps}}</span>
-      {{if gt .Missing 0}}<span class="newflag">{{.Missing}} missing</span>{{end}}
+      {{if .Multi}}<span class="newflag seasons">{{.Entries}} seasons</span>{{else}}{{if gt .Missing 0}}<span class="newflag">{{.Missing}} missing</span>{{end}}{{end}}
     </a>
     {{if gt .ProgressPct 0}}<div class="bar"><span style="width: {{.ProgressPct}}%"></span></div>{{end}}
     <div class="meta">
-      <a href="/shows/{{.ID}}" title="{{.DisplayTitle}}">{{.DisplayTitle}}</a>
-      <p class="muted">{{.NextLine}}</p>
+      <a href="{{.Href}}" title="{{.DisplayTitle}}">{{.DisplayTitle}}</a>
+      <p class="muted">{{if .Multi}}{{.Badge}}{{else}}{{.NextLine}}{{end}}</p>
     </div>
   </article>
 {{end}}
 </div>
 {{end}}
+{{end}}
+
+{{define "franchise"}}
+<div class="showhead">
+  {{if .Show.CoverImage}}<img src="{{.Show.CoverImage}}" alt="">{{else}}<span class="ph">{{letter (.Show.DisplayTitle)}}</span>{{end}}
+  <div>
+    <p class="muted"><a href="/shows">Shows</a></p>
+    <h1>{{.Show.DisplayTitle}}</h1>
+    <p class="muted">{{.EpSummary}}</p>
+    <div class="toolbar">
+      <form method="post" action="/shows/add">
+        <input type="hidden" name="anilist_id" value="{{.Show.AniListID}}">
+        <button class="btn" type="submit" name="all_seasons" value="1">Add all seasons</button>
+      </form>
+    </div>
+  </div>
+</div>
+<h2>Entries</h2>
+<div class="table-wrap">
+<table class="franchise-entries">
+  <thead>
+    <tr><th></th><th>Title</th><th>Kind</th><th>Aired</th><th>Episodes</th><th>Monitor</th></tr>
+  </thead>
+  <tbody>
+    {{range .Entries}}
+    <tr>
+      <td class="cover">{{if .CoverImage}}<img src="{{.CoverImage}}" alt="">{{else}}<span class="ph">{{letter (.DisplayTitle)}}</span>{{end}}</td>
+      <td><a href="/shows/{{.ID}}">{{.DisplayTitle}}</a></td>
+      <td>{{.Label}}</td>
+      <td class="muted">{{if .Released}}{{.Released}}{{else}}—{{end}}</td>
+      <td>{{.Downloaded}}/{{.TotalEps}}</td>
+      <td>{{if .Monitored}}Monitored{{else}}Not monitored{{end}}</td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+</div>
 {{end}}
 
 {{define "show"}}
@@ -267,6 +306,14 @@ document.body.addEventListener("htmx:afterRequest", function (e) {
   </div>
 </div>
 <h2>Episodes</h2>
+{{if .GrabNote}}<p class="note" id="grab-note">{{.GrabNote}}</p>{{end}}
+{{if .Rows}}
+<form method="post" action="/shows/{{.Show.ID}}/interactive">
+  <input type="hidden" name="csrf" value="{{.CSRF}}">
+  <button class="btn" type="submit" hx-post="/shows/{{.Show.ID}}/interactive" hx-target="#show-releases" hx-swap="innerHTML" hx-disabled-elt="this">Search all releases</button>
+</form>
+<div id="show-releases"></div>
+{{end}}
 {{if not .Rows}}
 {{if eq .Show.Status "NOT_YET_RELEASED"}}
 <p class="empty">This show hasn't aired yet. Episodes appear after AniList lists them and the next sync runs.</p>
@@ -281,7 +328,9 @@ document.body.addEventListener("htmx:afterRequest", function (e) {
     <tr><th>#</th><th>Air</th><th>State</th><th></th></tr>
   </thead>
   <tbody>
-    {{range .Rows}}{{template "episode-row" .}}{{end}}
+    {{range .Rows}}{{template "episode-row" .}}
+    <tr class="ix-row" id="ix-{{.Episode.Number}}"><td colspan="4"></td></tr>
+    {{end}}
   </tbody>
 </table>
 </div>
@@ -304,6 +353,10 @@ document.body.addEventListener("htmx:afterRequest", function (e) {
       <form method="post" action="/shows/{{.Show.ID}}/episodes/{{.Episode.Number}}/search" hx-post="/shows/{{.Show.ID}}/episodes/{{.Episode.Number}}/search" hx-target="#ep-{{.Episode.Number}}" hx-swap="outerHTML settle:40ms" hx-disabled-elt="find button">
         <button type="submit">Search</button>
       </form>
+      <form method="post" action="/shows/{{.Show.ID}}/episodes/{{.Episode.Number}}/interactive">
+        <input type="hidden" name="csrf" value="{{.CSRF}}">
+        <button type="submit" hx-post="/shows/{{.Show.ID}}/episodes/{{.Episode.Number}}/interactive" hx-target="#ix-{{.Episode.Number}} td" hx-swap="innerHTML" hx-disabled-elt="this">Interactive search</button>
+      </form>
       {{end}}
       {{if eq .Episode.State "ignored"}}
       <form method="post" action="/shows/{{.Show.ID}}/episodes/{{.Episode.Number}}/unignore" hx-post="/shows/{{.Show.ID}}/episodes/{{.Episode.Number}}/unignore" hx-target="#ep-{{.Episode.Number}}" hx-swap="outerHTML settle:40ms" hx-disabled-elt="find button">
@@ -322,6 +375,69 @@ document.body.addEventListener("htmx:afterRequest", function (e) {
     </div>
   </td>
 </tr>
+{{end}}
+
+{{define "release-panel"}}
+{{if .Flash}}<p class="flash">{{.Flash}}</p>{{end}}
+{{if .Error}}<p class="error">{{.Error}}</p>{{end}}
+{{if .Note}}<p class="note">{{.Note}}</p>{{end}}
+{{if not .Rows}}{{if not .Error}}{{if not .Flash}}<p class="empty">No releases from the indexer.</p>{{end}}{{end}}{{end}}
+{{if .Rows}}
+<div class="table-wrap ix-wrap">
+<table class="ix">
+  <thead>
+    <tr>
+      <th><button type="button" class="ix-sort" data-key="title">Release</button></th>
+      <th><button type="button" class="ix-sort" data-key="size" data-type="num">Size</button></th>
+      <th><button type="button" class="ix-sort" data-key="seeders" data-type="num">S / L</button></th>
+      <th><button type="button" class="ix-sort" data-key="age" data-type="num">Published</button></th>
+      <th><button type="button" class="ix-sort" data-key="group">Group</button></th>
+      <th><button type="button" class="ix-sort" data-key="resolution">Resolution</button></th>
+      <th><button type="button" class="ix-sort" data-key="codec">Codec</button></th>
+      <th><button type="button" class="ix-sort" data-key="score" data-type="num" data-dir="desc">Score</button></th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {{range .Rows}}
+    <tr class="{{if .Rejected}}rejected{{end}}" data-title="{{.Title}}" data-size="{{.Bytes}}" data-seeders="{{.Seeders}}" data-age="{{.AgeUnix}}" data-group="{{.Group}}" data-resolution="{{.Resolution}}" data-codec="{{.Codec}}" data-score="{{.Score}}">
+      <td>
+        <div class="release">{{.Title}}</div>
+        {{if .Rejected}}<div class="reject">Rejected: {{.Reject}}</div>{{end}}
+        {{if .Reasons}}<div class="muted reason">{{.Reasons}}</div>{{end}}
+      </td>
+      <td>{{.Size}}</td>
+      <td>{{.Peers}}</td>
+      <td class="muted">{{.Age}}</td>
+      <td>{{.Group}}</td>
+      <td>{{.Resolution}}</td>
+      <td>{{.Codec}}</td>
+      <td class="num">{{.Score}}</td>
+      <td class="actions">
+        {{if $.GrabOff}}
+        <button type="button" disabled title="qBittorrent is not configured">Grab</button>
+        {{else}}
+        {{if $.Episode}}
+        <form method="post" action="/shows/{{$.ShowID}}/episodes/{{$.Episode}}/grab">
+          <input type="hidden" name="csrf" value="{{$.CSRF}}">
+          <input type="hidden" name="infohash" value="{{.InfoHash}}">
+          <button type="submit" hx-post="/shows/{{$.ShowID}}/episodes/{{$.Episode}}/grab" hx-target="#ep-{{$.Episode}}" hx-swap="outerHTML settle:40ms" hx-disabled-elt="this">Grab</button>
+        </form>
+        {{else}}
+        <form method="post" action="/shows/{{$.ShowID}}/grab">
+          <input type="hidden" name="csrf" value="{{$.CSRF}}">
+          <input type="hidden" name="infohash" value="{{.InfoHash}}">
+          <button type="submit" hx-post="/shows/{{$.ShowID}}/grab" hx-target="#show-releases" hx-swap="innerHTML" hx-disabled-elt="this">Grab</button>
+        </form>
+        {{end}}
+        {{end}}
+      </td>
+    </tr>
+    {{end}}
+  </tbody>
+</table>
+</div>
+{{end}}
 {{end}}
 
 {{define "search"}}

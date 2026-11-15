@@ -31,8 +31,9 @@ import (
 // ErrNoRelease means a targeted search found nothing acceptable.
 var ErrNoRelease = errors.New("no matching release")
 
-// ErrAutomationOff is returned when a manual action would search, grab, import,
-// or refresh Jellyfin while AUTOMATION_ENABLED is false.
+// ErrAutomationOff is returned when the scheduler would search, grab, or import
+// while AUTOMATION_ENABLED is false. Show-page Search, Re-download, Interactive
+// search, and Grab do not return it.
 var ErrAutomationOff = errors.New("Automation is off: enable it in Settings")
 
 // Downloader is the qBittorrent surface the pipeline needs.
@@ -241,11 +242,9 @@ func (s *Service) IgnoreEpisode(ctx context.Context, showID int64, number int, i
 }
 
 // SearchEpisode searches Nyaa for one episode now.
+// It runs when the user clicks Search, including while automation is off.
 func (s *Service) SearchEpisode(ctx context.Context, showID int64, number int) error {
 	cfg := s.live(ctx)
-	if err := automationErr(cfg); err != nil {
-		return err
-	}
 	sh, ep, err := s.loadEp(ctx, showID, number)
 	if err != nil {
 		return err
@@ -258,7 +257,7 @@ func (s *Service) SearchEpisode(ctx context.Context, showID int64, number int) e
 	if err != nil {
 		return err
 	}
-	return s.consider(ctx, cfg, sh, ep, rels, true)
+	return s.consider(ctx, cfg, sh, ep, rels, true, true)
 }
 
 // Redownload searches again and replaces the grab even if a file is already imported.
@@ -321,7 +320,7 @@ func (s *Service) PollRSS(ctx context.Context) error {
 		if err != nil {
 			continue
 		}
-		if err := s.consider(ctx, cfg, byID[k.show], ep, list, false); err != nil && !errors.Is(err, ErrNoRelease) && !errors.Is(err, ErrAutomationOff) {
+		if err := s.consider(ctx, cfg, byID[k.show], ep, list, false, false); err != nil && !errors.Is(err, ErrNoRelease) && !errors.Is(err, ErrAutomationOff) {
 			s.log().Warn("rss grab", "err", err, "show", byID[k.show].DisplayTitle(), "episode", k.ep)
 		}
 	}
@@ -353,7 +352,7 @@ func (s *Service) PollRSS(ctx context.Context) error {
 			s.history(ctx, "warn", "search failed: "+err.Error(), item.Show.ID, item.Episode.Number)
 			continue
 		}
-		if err := s.consider(ctx, cfg, item.Show, item.Episode, rels, false); err != nil && !errors.Is(err, ErrNoRelease) && !errors.Is(err, ErrAutomationOff) {
+		if err := s.consider(ctx, cfg, item.Show, item.Episode, rels, false, false); err != nil && !errors.Is(err, ErrNoRelease) && !errors.Is(err, ErrAutomationOff) {
 			s.history(ctx, "warn", "search failed: "+err.Error(), item.Show.ID, item.Episode.Number)
 		}
 	}
@@ -443,6 +442,8 @@ func (s *Service) upsertMedia(ctx context.Context, m anilist.Media, listStatus s
 		Season:            m.Season,
 		SeasonYear:        m.SeasonYearValue(),
 		StartYear:         m.StartYear(),
+		StartMonth:        m.StartMonth(),
+		StartDay:          m.StartDay(),
 		Monitored:         monitored,
 		RelationsJSON:     m.RelationsJSON(),
 		Description:       m.Description,
@@ -500,7 +501,7 @@ func (s *Service) searchTitles(ctx context.Context, cfg config.Config, sh store.
 	return indexer.Dedupe(lists...), nil
 }
 
-func (s *Service) consider(ctx context.Context, cfg config.Config, sh store.Show, ep store.Episode, rels []indexer.Release, force bool) error {
+func (s *Service) consider(ctx context.Context, cfg config.Config, sh store.Show, ep store.Episode, rels []indexer.Release, force, manual bool) error {
 	best, ok := s.pick(cfg, sh, ep, rels)
 	if !ok {
 		if force {
@@ -508,7 +509,7 @@ func (s *Service) consider(ctx context.Context, cfg config.Config, sh store.Show
 		}
 		return nil
 	}
-	return s.grab(ctx, cfg, sh, ep, best, force)
+	return s.grabEpisodes(ctx, cfg, sh, []store.Episode{ep}, best, force, manual)
 }
 
 func (s *Service) pick(cfg config.Config, sh store.Show, ep store.Episode, rels []indexer.Release) (picked, bool) {
@@ -542,41 +543,52 @@ func (s *Service) pick(cfg config.Config, sh store.Show, ep store.Episode, rels 
 	return best, found
 }
 
-func (s *Service) grab(ctx context.Context, cfg config.Config, sh store.Show, ep store.Episode, best picked, force bool) error {
-	if err := automationErr(cfg); err != nil {
-		return err
+func (s *Service) grabEpisodes(ctx context.Context, cfg config.Config, sh store.Show, eps []store.Episode, best picked, force, manual bool) error {
+	if !manual {
+		if err := automationErr(cfg); err != nil {
+			return err
+		}
+	}
+	if len(eps) == 0 {
+		return fmt.Errorf("no episodes to grab")
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	cur, err := s.Store.GetEpisode(ctx, sh.ID, ep.Number)
-	if err != nil {
-		return err
+	var targets []store.Episode
+	for _, ep := range eps {
+		cur, err := s.Store.GetEpisode(ctx, sh.ID, ep.Number)
+		if err != nil {
+			return err
+		}
+		if strings.EqualFold(cur.InfoHash, best.rel.InfoHash) && cur.InfoHash != "" && cur.State == store.StateDownloading {
+			continue
+		}
+		if !force {
+			switch cur.State {
+			case store.StateIgnored, store.StateDownloading, store.StateUpcoming:
+				continue
+			case store.StateDownloaded:
+				at := time.Time{}
+				if cur.DownloadedAt != nil {
+					at = *cur.DownloadedAt
+				}
+				if !score.ShouldUpgrade(cur.Score, cur.Version, at, best.score, best.parsed, time.Now(), cfg.Upgrade) {
+					continue
+				}
+			default:
+				// A recorded file that is not in the upgrade path is already owned.
+				if strings.TrimSpace(cur.FilePath) != "" {
+					continue
+				}
+			}
+		}
+		targets = append(targets, cur)
 	}
-	if strings.EqualFold(cur.InfoHash, best.rel.InfoHash) && cur.InfoHash != "" && cur.State == store.StateDownloading {
+	if len(targets) == 0 {
 		return nil
 	}
-	if !force {
-		switch cur.State {
-		case store.StateIgnored, store.StateDownloading, store.StateUpcoming:
-			return nil
-		case store.StateDownloaded:
-			at := time.Time{}
-			if cur.DownloadedAt != nil {
-				at = *cur.DownloadedAt
-			}
-			if !score.ShouldUpgrade(cur.Score, cur.Version, at, best.score, best.parsed, time.Now(), cfg.Upgrade) {
-				return nil
-			}
-		default:
-			// A recorded file that is not in the upgrade path is already owned.
-			if strings.TrimSpace(cur.FilePath) != "" {
-				return nil
-			}
-		}
-		// Any category: Get looks the hash up with no category filter.
-		if s.torrentPresent(ctx, best.rel.InfoHash) {
-			return nil
-		}
+	if !force && s.torrentPresent(ctx, best.rel.InfoHash) {
+		return nil
 	}
 	if s.Qbit == nil {
 		return fmt.Errorf("qBittorrent is not configured")
@@ -589,43 +601,51 @@ func (s *Service) grab(ctx context.Context, cfg config.Config, sh store.Show, ep
 		return fmt.Errorf("release has no magnet or infohash")
 	}
 	save := cfg.SaveDir()
+	tags := []string{"animarr", fmt.Sprintf("anilist-%d", sh.AniListID)}
+	if len(targets) == 1 {
+		tags = append(tags, fmt.Sprintf("ep-%d", targets[0].Number))
+	} else {
+		tags = append(tags, "batch")
+	}
 	addedHash, err := s.Qbit.Add(ctx, qbit.AddRequest{
 		URL:      magnet,
 		Category: cfg.QBCategory,
 		SavePath: save,
-		Tags:     []string{"animarr", fmt.Sprintf("ep-%d", ep.Number), fmt.Sprintf("anilist-%d", sh.AniListID)},
+		Tags:     tags,
 	})
 	if err != nil {
-		s.history(ctx, "error", "qBittorrent add failed: "+err.Error(), sh.ID, ep.Number)
+		s.history(ctx, "error", "qBittorrent add failed: "+err.Error(), sh.ID, targets[0].Number)
 		return err
 	}
 	hash := strings.ToLower(best.rel.InfoHash)
 	if h := strings.ToLower(strings.TrimSpace(addedHash)); h != "" {
 		hash = h
 	}
-	cur.State = store.StateDownloading
-	cur.ReleaseTitle = best.rel.Title
-	cur.InfoHash = hash
-	cur.Score = best.score
-	cur.Version = best.parsed.Version
-	if cur.Version < 1 {
-		cur.Version = 1
+	for _, cur := range targets {
+		cur.State = store.StateDownloading
+		cur.ReleaseTitle = best.rel.Title
+		cur.InfoHash = hash
+		cur.Score = best.score
+		cur.Version = best.parsed.Version
+		if cur.Version < 1 {
+			cur.Version = 1
+		}
+		if err := s.Store.UpdateEpisode(ctx, cur); err != nil {
+			return err
+		}
+		if _, err := s.Store.AddDownload(ctx, store.Download{
+			ShowID:   sh.ID,
+			Episode:  cur.Number,
+			InfoHash: hash,
+			Title:    best.rel.Title,
+			SavePath: save,
+			State:    store.DlDownloading,
+			Score:    best.score,
+		}); err != nil {
+			return err
+		}
+		s.history(ctx, "info", "grabbed "+best.rel.Title, sh.ID, cur.Number)
 	}
-	if err := s.Store.UpdateEpisode(ctx, cur); err != nil {
-		return err
-	}
-	if _, err := s.Store.AddDownload(ctx, store.Download{
-		ShowID:   sh.ID,
-		Episode:  ep.Number,
-		InfoHash: hash,
-		Title:    best.rel.Title,
-		SavePath: save,
-		State:    store.DlDownloading,
-		Score:    best.score,
-	}); err != nil {
-		return err
-	}
-	s.history(ctx, "info", "grabbed "+best.rel.Title, sh.ID, ep.Number)
 	return nil
 }
 

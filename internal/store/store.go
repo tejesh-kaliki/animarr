@@ -50,6 +50,8 @@ type Show struct {
 	Season              string
 	SeasonYear          int
 	StartYear           int
+	StartMonth          int
+	StartDay            int
 	Monitored           bool
 	PreferredResolution string
 	RelationsJSON       string

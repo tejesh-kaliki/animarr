@@ -120,7 +120,7 @@ func (s *Store) WantedBacklog(ctx context.Context, airedBefore, searchedBefore t
 			ReleaseTitle: row.ReleaseTitle, InfoHash: row.InfoHash, FilePath: row.FilePath,
 			Score: row.Score, Version: row.Version, DownloadedAt: row.DownloadedAt, LastSearchAt: row.LastSearchAt,
 		})
-		sh := showFromList(row.ShowPk, row.AnilistID, row.TitleRomaji, row.TitleEnglish, row.TitleNative, row.Synonyms, row.Format, row.Status, row.ListStatus, row.Episodes, row.NextAiringEpisode, row.NextAiringAt, row.CoverImage, row.Season, row.SeasonYear, row.StartYear, row.Monitored, row.PreferredResolution, row.RelationsJson, row.CreatedAt, row.UpdatedAt, row.Description, row.Genres, row.Studio, row.FranchiseID, row.SeasonNumber, 0, 0)
+		sh := showFromList(row.ShowPk, row.AnilistID, row.TitleRomaji, row.TitleEnglish, row.TitleNative, row.Synonyms, row.Format, row.Status, row.ListStatus, row.Episodes, row.NextAiringEpisode, row.NextAiringAt, row.CoverImage, row.Season, row.SeasonYear, row.StartYear, row.StartMonth, row.StartDay, row.Monitored, row.PreferredResolution, row.RelationsJson, row.CreatedAt, row.UpdatedAt, row.Description, row.Genres, row.Studio, row.FranchiseID, row.SeasonNumber, 0, 0)
 		out = append(out, EpisodeWithShow{Episode: ep, Show: sh})
 	}
 	return out, nil

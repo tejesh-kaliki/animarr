@@ -43,23 +43,31 @@ type showCard struct {
 	NextLine string
 }
 
-// franchiseGroup is one franchise on the Shows page.
-type franchiseGroup struct {
-	Title      string
-	Cards      []showCard
-	Downloaded int
-	TotalEps   int
+// franchiseEntry is one row on the franchise page.
+type franchiseEntry struct {
+	showCard
+	Label    string
+	Released string
 }
 
-// groupFranchises splits cards into franchises with more than one entry and
-// standalone shows. Order follows the incoming sort. Seasons inside a group
-// are ordered by season number.
-func groupFranchises(cards []showCard) (groups []franchiseGroup, single []showCard) {
+// gridCard is one tile on the Shows page.
+// A franchise with several entries is one tile. A single entry stays a show tile.
+type gridCard struct {
+	showCard
+	Href    string
+	Badge   string
+	Multi   bool
+	Entries int
+}
+
+// libraryGrid collapses multi-entry franchises into one card each.
+// Single-entry shows, including a franchise id that appears once in this list, stay as they are.
+// Card order follows the incoming order of first appearance.
+func libraryGrid(cards []showCard) []gridCard {
 	byID := map[int]int{}
 	var members [][]showCard
 	for _, c := range cards {
 		if c.FranchiseID == 0 {
-			single = append(single, c)
 			continue
 		}
 		i, ok := byID[c.FranchiseID]
@@ -70,28 +78,140 @@ func groupFranchises(cards []showCard) (groups []franchiseGroup, single []showCa
 		}
 		members[i] = append(members[i], c)
 	}
-	for _, m := range members {
-		if len(m) == 1 {
-			single = append(single, m[0])
+	var out []gridCard
+	placed := map[int]bool{}
+	for _, c := range cards {
+		if c.FranchiseID == 0 {
+			out = append(out, gridCard{showCard: c, Href: fmt.Sprintf("/shows/%d", c.ID)})
 			continue
 		}
-		slices.SortStableFunc(m, func(a, b showCard) int {
-			if a.SeasonNumber != b.SeasonNumber {
-				return int(a.SeasonNumber - b.SeasonNumber)
-			}
-			return int(a.ID - b.ID)
-		})
-		g := franchiseGroup{Cards: m, Title: m[0].DisplayTitle()}
-		for _, c := range m {
-			if c.AniListID == c.FranchiseID {
-				g.Title = c.DisplayTitle()
-			}
-			g.Downloaded += int(c.Downloaded)
-			g.TotalEps += int(c.TotalEps)
+		i := byID[c.FranchiseID]
+		if placed[i] {
+			continue
 		}
-		groups = append(groups, g)
+		placed[i] = true
+		m := members[i]
+		if len(m) == 1 {
+			out = append(out, gridCard{showCard: m[0], Href: fmt.Sprintf("/shows/%d", m[0].ID)})
+			continue
+		}
+		out = append(out, franchiseCard(m))
 	}
-	return groups, single
+	return out
+}
+
+func franchiseCard(m []showCard) gridCard {
+	root := m[0]
+	var downloaded, total, missing int
+	var newest time.Time
+	var next *time.Time
+	for _, c := range m {
+		if c.AniListID == c.FranchiseID {
+			root = c
+		}
+		downloaded += int(c.Downloaded)
+		total += int(c.TotalEps)
+		missing += c.Missing
+		if c.CreatedAt.After(newest) {
+			newest = c.CreatedAt
+		}
+		if c.NextAiringAt != nil && !c.NextAiringAt.IsZero() && (next == nil || c.NextAiringAt.Before(*next)) {
+			t := *c.NextAiringAt
+			next = &t
+		}
+	}
+	if root.AniListID != root.FranchiseID {
+		// No stored root in this filter. Use the earliest start, then the lowest season number.
+		root = orderByStart(append([]showCard(nil), m...))[0]
+	}
+	card := root
+	card.Downloaded = downloaded
+	card.TotalEps = total
+	card.Missing = missing
+	card.CreatedAt = newest
+	card.NextAiringAt = next
+	n := len(m)
+	word := "seasons"
+	if n == 1 {
+		word = "season"
+	}
+	badge := fmt.Sprintf("%d %s · %d/%d eps", n, word, downloaded, total)
+	card.NextLine = badge
+	id := root.FranchiseID
+	if id == 0 {
+		id = root.AniListID
+	}
+	return gridCard{
+		showCard: card,
+		Href:     fmt.Sprintf("/franchises/%d", id),
+		Badge:    badge,
+		Multi:    true,
+		Entries:  n,
+	}
+}
+
+// orderByStart orders franchise entries by first air date.
+// A missing year sorts last. Ties break on season number, then AniList id.
+// Season 0, movies, and specials stay where their date puts them.
+func orderByStart(cards []showCard) []showCard {
+	out := append([]showCard(nil), cards...)
+	slices.SortStableFunc(out, func(a, b showCard) int {
+		if c := cmpStart(a.Show, b.Show); c != 0 {
+			return c
+		}
+		if a.SeasonNumber != b.SeasonNumber {
+			return a.SeasonNumber - b.SeasonNumber
+		}
+		return a.AniListID - b.AniListID
+	})
+	return out
+}
+
+func cmpStart(a, b store.Show) int {
+	if (a.StartYear == 0) != (b.StartYear == 0) {
+		if a.StartYear == 0 {
+			return 1
+		}
+		return -1
+	}
+	if a.StartYear != b.StartYear {
+		return a.StartYear - b.StartYear
+	}
+	if a.StartMonth != b.StartMonth {
+		return a.StartMonth - b.StartMonth
+	}
+	return a.StartDay - b.StartDay
+}
+
+// seasonLabel is the franchise placement: Season N, Movie, OVA, or Special.
+func seasonLabel(sh store.Show) string {
+	switch strings.ToUpper(strings.TrimSpace(sh.Format)) {
+	case "MOVIE":
+		return "Movie"
+	case "OVA", "ONA":
+		return "OVA"
+	case "SPECIAL", "MUSIC":
+		return "Special"
+	}
+	if sh.SeasonNumber <= 0 {
+		return "Special"
+	}
+	return fmt.Sprintf("Season %d", sh.SeasonNumber)
+}
+
+// releaseMonth is the first airing as "Mon YYYY". Year only when the month was not stored.
+func releaseMonth(sh store.Show) string {
+	year := sh.StartYear
+	if year <= 0 {
+		year = sh.SeasonYear
+	}
+	if year <= 0 {
+		return ""
+	}
+	if sh.StartMonth < 1 || sh.StartMonth > 12 {
+		return fmt.Sprintf("%d", year)
+	}
+	return time.Date(year, time.Month(sh.StartMonth), 1, 0, 0, 0, 0, time.UTC).Format("Jan 2006")
 }
 
 type epFacts struct {
@@ -202,6 +322,43 @@ func formatAirDay(t *time.Time) string {
 		return strings.TrimSpace(loc.Format("2 Jan"))
 	}
 	return loc.Format("2 Jan 2006")
+}
+
+func formatSize(n int64) string {
+	if n <= 0 {
+		return "—"
+	}
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := int64(unit), 0
+	for v := n / unit; v >= unit && exp < 3; v /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %ciB", float64(n)/float64(div), "KMGT"[exp])
+}
+
+func formatAge(t, now time.Time) string {
+	if t.IsZero() {
+		return "—"
+	}
+	d := now.Sub(t)
+	if d < 0 {
+		d = 0
+	}
+	when := t.Local().Format("2 Jan 2006")
+	var age string
+	switch {
+	case d < time.Hour:
+		age = fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 48*time.Hour:
+		age = fmt.Sprintf("%dh", int(d.Hours()))
+	default:
+		age = fmt.Sprintf("%dd", int(d.Hours()/24))
+	}
+	return when + " · " + age
 }
 
 func formatClock(t time.Time) string {

@@ -2,6 +2,21 @@ package parser
 
 import "testing"
 
+func TestBatchRangeEnd(t *testing.T) {
+	p := Parse("[SubsPlease] Title - 01-12 (1080p)")
+	if !p.Batch || p.Episode != 1 || p.EpisodeEnd != 12 {
+		t.Fatalf("%+v", p)
+	}
+	sx := Parse("[Group] Title S01E01-E12 [1080p]")
+	if !sx.Batch || sx.Episode != 1 || sx.EpisodeEnd != 12 || sx.Season != 1 {
+		t.Fatalf("%+v", sx)
+	}
+	word := Parse("[Group] Title Batch [1080p]")
+	if !word.Batch || word.EpisodeEnd != 0 {
+		t.Fatalf("%+v", word)
+	}
+}
+
 func TestParseSamples(t *testing.T) {
 	tests := []struct {
 		in      string

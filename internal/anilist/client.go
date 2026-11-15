@@ -217,6 +217,22 @@ func (m Media) StartYear() int {
 	return *m.StartDate.Year
 }
 
+// StartMonth is 0 when AniList has no month.
+func (m Media) StartMonth() int {
+	if m.StartDate.Month == nil || *m.StartDate.Month < 1 || *m.StartDate.Month > 12 {
+		return 0
+	}
+	return *m.StartDate.Month
+}
+
+// StartDay is 0 when AniList has no day.
+func (m Media) StartDay() int {
+	if m.StartDate.Day == nil || *m.StartDate.Day < 1 || *m.StartDate.Day > 31 {
+		return 0
+	}
+	return *m.StartDate.Day
+}
+
 // SeasonYearValue is 0 when unset.
 func (m Media) SeasonYearValue() int {
 	if m.SeasonYear == nil {
