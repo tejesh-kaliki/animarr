@@ -66,6 +66,9 @@ type view struct {
 	Preferred                      string
 	AutomationOff                  bool
 	CopyFallback                   bool
+	EncodeOn                       bool
+	EncodeSummary                  string
+	EncodeRows                     []encodeRow
 }
 
 type epView struct {
@@ -131,6 +134,15 @@ func New(pipe *pipeline.Service, st *store.Store, cfg config.Config) (*Server, e
 	mux.HandleFunc("POST /shows/add", s.postAdd)
 	mux.HandleFunc("GET /search", s.search)
 	mux.HandleFunc("GET /activity", s.activity)
+	mux.HandleFunc("GET /encode", s.encodePage)
+	mux.HandleFunc("GET /encode/table", s.encodeTable)
+	mux.HandleFunc("POST /encode/enqueue", s.postEncodeEnqueue)
+	mux.HandleFunc("POST /encode/requeue", s.postEncodeRequeue)
+	mux.HandleFunc("GET /api/encode/next", s.encodeNext)
+	mux.HandleFunc("POST /api/encode/{id}/heartbeat", s.encodeHeartbeat)
+	mux.HandleFunc("POST /api/encode/{id}/done", s.encodeDone)
+	mux.HandleFunc("POST /api/encode/{id}/fail", s.encodeFail)
+	mux.HandleFunc("POST /api/encode/{id}/release", s.encodeRelease)
 	mux.HandleFunc("GET /settings", s.settings)
 	mux.HandleFunc("POST /settings", s.postSettings)
 	mux.HandleFunc("POST /sync", s.postSync)

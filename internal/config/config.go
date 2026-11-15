@@ -42,6 +42,7 @@ type Config struct {
 	MatchThreshold    float64
 	NFOEnabled        bool
 	AutomationEnabled bool
+	EncodeEnabled     bool
 	LogLevel          string
 	ConfigFile        string
 }
@@ -83,6 +84,7 @@ type Public struct {
 	UpgradeMinDelta   int
 	NFOEnabled        bool
 	AutomationEnabled bool
+	EncodeEnabled     bool
 	LogLevel          string
 }
 
@@ -146,6 +148,7 @@ func (c Config) Public() Public {
 		UpgradeMinDelta:   c.Upgrade.MinDelta,
 		NFOEnabled:        c.NFOEnabled,
 		AutomationEnabled: c.AutomationEnabled,
+		EncodeEnabled:     c.EncodeEnabled,
 		LogLevel:          c.LogLevel,
 	}
 }
@@ -166,6 +169,7 @@ type fileConfig struct {
 	NyaaCategory        *string  `json:"nyaaCategory"`
 	NFOEnabled          *bool    `json:"nfoEnabled"`
 	AutomationEnabled   *bool    `json:"automationEnabled"`
+	EncodeEnabled       *bool    `json:"encodeEnabled"`
 }
 
 // Load reads defaults, then CONFIG_FILE, then the environment.
@@ -301,6 +305,10 @@ func applyFile(cfg *Config, path string) ([]string, error) {
 		cfg.AutomationEnabled = *f.AutomationEnabled
 		mark(KeyAutomationEnabled)
 	}
+	if f.EncodeEnabled != nil {
+		cfg.EncodeEnabled = *f.EncodeEnabled
+		mark(KeyEncodeEnabled)
+	}
 	return keys, nil
 }
 
@@ -433,6 +441,9 @@ func applyEnv(cfg *Config) []string {
 	}
 	if setBool(&cfg.AutomationEnabled, "AUTOMATION_ENABLED") {
 		mark(KeyAutomationEnabled)
+	}
+	if setBool(&cfg.EncodeEnabled, "ENCODE_ENABLED") {
+		mark(KeyEncodeEnabled)
 	}
 	return keys
 }

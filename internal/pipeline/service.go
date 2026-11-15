@@ -727,13 +727,30 @@ func (s *Service) importCompleted(ctx context.Context, cfg config.Config, d stor
 			s.log().Warn("nfo", "err", err)
 		}
 	}
-	if s.Jellyfin != nil && s.Jellyfin.Enabled() {
-		if err := s.Jellyfin.Refresh(ctx); err != nil {
-			s.history(ctx, "warn", "Jellyfin refresh failed: "+err.Error(), d.ShowID, d.Episode)
-			s.log().Warn("jellyfin refresh", "err", err)
-		}
+	if err := s.RefreshLibrary(ctx); err != nil {
+		s.history(ctx, "warn", "Jellyfin refresh failed: "+err.Error(), d.ShowID, d.Episode)
+		s.log().Warn("jellyfin refresh", "err", err)
 	}
+	s.queueEncode(ctx, cfg, ep)
 	return nil
+}
+
+// RefreshLibrary asks Jellyfin to rescan. It does nothing when Jellyfin is not configured.
+func (s *Service) RefreshLibrary(ctx context.Context) error {
+	if s == nil || s.Jellyfin == nil || !s.Jellyfin.Enabled() {
+		return nil
+	}
+	return s.Jellyfin.Refresh(ctx)
+}
+
+// queueEncode records a file for the Mac worker. A failure is logged and does not fail the import.
+func (s *Service) queueEncode(ctx context.Context, cfg config.Config, ep store.Episode) {
+	if s == nil || s.Store == nil || !cfg.EncodeEnabled || ep.ID == 0 || strings.TrimSpace(ep.FilePath) == "" {
+		return
+	}
+	if _, err := s.Store.EnqueueEncode(ctx, ep.ID, ep.FilePath, time.Now()); err != nil {
+		s.log().Warn("encode queue", "episode", ep.ID, "err", err)
+	}
 }
 
 func (s *Service) failEpisode(ctx context.Context, d store.Download, msg string) error {

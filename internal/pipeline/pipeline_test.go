@@ -421,6 +421,72 @@ func TestImportWritesNFO(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(filepath.Dir(ep.FilePath), "season.nfo")); err != nil {
 		t.Fatal(err)
 	}
+	rows, err := st.ListEncodes(ctx, 10)
+	if err != nil || len(rows) != 0 {
+		t.Fatalf("encode queued while ENCODE_ENABLED is off: %+v %v", rows, err)
+	}
+}
+
+func TestImportQueuesEncodeWhenEnabled(t *testing.T) {
+	root := t.TempDir()
+	cfg := testCfg(root)
+	cfg.EncodeEnabled = true
+	cfg.NFOEnabled = false
+	st := openStore(t)
+	ctx := context.Background()
+	sh, err := st.UpsertShow(ctx, store.Show{
+		AniListID: 8, TitleRomaji: "Encode Show", TitleEnglish: "Encode Show", Format: "TV",
+		Status: "FINISHED", Episodes: 1, Monitored: true,
+	}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetFranchise(ctx, sh.ID, 8, 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.EnsureEpisode(ctx, sh.ID, 1, nil, store.StateWanted); err != nil {
+		t.Fatal(err)
+	}
+	const hash = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+	qb := &fakeQbit{}
+	lib := &fakeLib{}
+	svc := &Service{
+		Config: cfg, Store: st, Qbit: qb, Jellyfin: lib,
+		Indexer: &fakeIndex{recent: []indexer.Release{{
+			Title: "[SubsPlease] Encode Show - 01 (1080p)", InfoHash: hash, Magnet: "magnet:?xt=urn:btih:" + hash, Seeders: 5,
+		}}},
+		Log: slog.New(slog.NewTextHandler(io.Discard, nil)),
+	}
+	if err := svc.PollRSS(ctx); err != nil {
+		t.Fatal(err)
+	}
+	save := cfg.SaveDir()
+	if err := os.MkdirAll(save, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(save, "Encode Show - 01.mkv"), []byte("video"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	qb.tor = qbit.Torrent{Hash: hash, State: "stalledUP", Progress: 1, SavePath: save, CompletionOn: time.Now().Unix()}
+	qb.files = []qbit.File{{Name: "Encode Show - 01.mkv", Size: 5, Progress: 1}}
+	if err := svc.PollDownloads(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if lib.n != 1 {
+		t.Fatalf("jellyfin refreshes %d", lib.n)
+	}
+	ep, err := st.GetEpisode(ctx, sh.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := st.ListEncodes(ctx, 10)
+	if err != nil || len(rows) != 1 || rows[0].State != store.EncodePending || rows[0].FilePath != ep.FilePath {
+		t.Fatalf("queue %+v err %v path %s", rows, err, ep.FilePath)
+	}
+	again, err := st.EnqueueEncode(ctx, ep.ID, ep.FilePath, time.Now())
+	if err != nil || again {
+		t.Fatalf("second enqueue %v %v", again, err)
+	}
 }
 
 func TestGrabUsesHashFromClient(t *testing.T) {

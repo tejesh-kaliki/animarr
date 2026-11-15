@@ -119,6 +119,36 @@ func TestAutomationDefaultsOff(t *testing.T) {
 	}
 }
 
+func TestEncodeDefaultsOff(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "animarr.json")
+	if err := os.WriteFile(path, []byte(`{"encodeEnabled":true}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CONFIG_FILE", "")
+	t.Setenv("ENCODE_ENABLED", "")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.EncodeEnabled || cfg.Public().EncodeEnabled {
+		t.Fatal("encode should default off")
+	}
+	if Format(cfg, KeyEncodeEnabled) != "false" {
+		t.Fatalf("format %q", Format(cfg, KeyEncodeEnabled))
+	}
+	t.Setenv("CONFIG_FILE", path)
+	cfg, err = Load()
+	if err != nil || !cfg.EncodeEnabled {
+		t.Fatalf("file should enable: %+v %v", cfg.EncodeEnabled, err)
+	}
+	t.Setenv("ENCODE_ENABLED", "off")
+	cfg, err = Load()
+	if err != nil || cfg.EncodeEnabled {
+		t.Fatal("env should override the file and turn encode off")
+	}
+}
+
 func TestRejectsBadThreshold(t *testing.T) {
 	t.Setenv("CONFIG_FILE", "")
 	t.Setenv("SCORE_MATCH_THRESHOLD", "2")

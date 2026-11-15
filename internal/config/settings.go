@@ -69,6 +69,7 @@ const (
 	KeyBacklogPerPoll      = "BACKLOG_PER_POLL"
 	KeyNFOEnabled          = "NFO_ENABLED"
 	KeyAutomationEnabled   = "AUTOMATION_ENABLED"
+	KeyEncodeEnabled       = "ENCODE_ENABLED"
 )
 
 // Spec describes one UI-editable setting.
@@ -217,6 +218,8 @@ func Format(cfg Config, key string) string {
 		return strconv.FormatBool(cfg.NFOEnabled)
 	case KeyAutomationEnabled:
 		return strconv.FormatBool(cfg.AutomationEnabled)
+	case KeyEncodeEnabled:
+		return strconv.FormatBool(cfg.EncodeEnabled)
 	default:
 		return ""
 	}
@@ -480,6 +483,9 @@ func applyValue(cfg *Config, spec Spec, value string) error {
 	case KeyAutomationEnabled:
 		b, _ := parseBool(value)
 		cfg.AutomationEnabled = b
+	case KeyEncodeEnabled:
+		b, _ := parseBool(value)
+		cfg.EncodeEnabled = b
 	default:
 		return fmt.Errorf("unknown setting %s", spec.Key)
 	}
@@ -524,6 +530,7 @@ var specs = []Spec{
 	{Key: KeyLibraryDir, Label: "Library directory", Help: "Jellyfin library root inside this container.", Group: "Library", Kind: KindPath},
 	{Key: KeyDownloadsDir, Label: "Downloads directory", Help: "qBittorrent download root. Grabs go in animarr/ under this.", Group: "Library", Kind: KindPath},
 	{Key: KeyNFOEnabled, Label: "NFO files", Help: "Write tvshow.nfo, season.nfo, and episode .nfo files.", Group: "Library", Kind: KindBool, Options: []string{"true", "false"}},
+	{Key: KeyEncodeEnabled, Label: "Encode", Help: "Off until you turn it on. The container only queues imported files. A Mac worker encodes them. Quality and the encoder are flags on that worker, not settings here.", Group: "Encode", Kind: KindBool, Options: []string{"true", "false"}},
 
 	{Key: KeyPreferredResolution, Label: "Preferred resolution", Group: "Scoring", Kind: KindResolution, Options: []string{"480p", "720p", "1080p", "2160p"}},
 	{Key: KeyGroupOrder, Label: "Group order", Help: "Earlier groups score higher. Comma-separated.", Group: "Scoring", Kind: KindText, AllowEmpty: true},

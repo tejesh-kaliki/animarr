@@ -28,6 +28,8 @@ Commands:
 | --- | --- |
 | `animarr` or `animarr serve` | Sync, poll Nyaa, import, and serve the UI |
 | `animarr organize [--dry-run]` | Move standalone movies into their folders and backfill movie NFOs, season posters, and specials NFOs |
+| `animarr encode-enqueue` | Queue downloaded files for the Mac encode worker. Refuses while `ENCODE_ENABLED` is off. See [Encode](#encode) |
+| `animarr encode-worker` | Claim those jobs on the Mac and encode them with VideoToolbox or libx265. See [docs/encoding.md](docs/encoding.md) |
 | `animarr rotate-key` | Re-encrypt saved secrets with a new key. See [Secrets](#secrets) |
 | `animarr health` | Exit 0 when `/healthz` returns 200 |
 
@@ -78,8 +80,9 @@ Save writes only fields that differ from the current effective value, so a click
 | `UPGRADE_WINDOW` | `72h` | yes | How long after import an upgrade is still allowed |
 | `UPGRADE_MIN_DELTA` | `15` | yes | Score gap required when `UPGRADE_ENABLED` is on |
 | `NFO_ENABLED` | `true` | yes | Write `tvshow.nfo`, `season.nfo`, and episode `.nfo` files from AniList. `false` skips them |
+| `ENCODE_ENABLED` | `false` | yes | Queue imported files for a Mac encode worker. The container does not encode. Off skips the queue and makes `GET /api/encode/next` return 204. Quality and the encoder are worker flags. See [Encode](#encode) |
 | `LOG_LEVEL` | `info` | no | `debug`, `info`, `warn`, or `error`. Restart to change it |
-| `CONFIG_FILE` | empty | no | JSON overlay, applied before env vars. Keys: `preferredResolution`, `hevcBonus`, `dubPenalty`, `repackBonus`, `minSeeders`, `groupOrder`, `matchThreshold`, `upgradeEnabled`, `upgradeRepack`, `upgradeWindow`, `upgradeMinDelta`, `nyaaUrls`, `nyaaCategory`, `nfoEnabled`, `automationEnabled` |
+| `CONFIG_FILE` | empty | no | JSON overlay, applied before env vars. Keys: `preferredResolution`, `hevcBonus`, `dubPenalty`, `repackBonus`, `minSeeders`, `groupOrder`, `matchThreshold`, `upgradeEnabled`, `upgradeRepack`, `upgradeWindow`, `upgradeMinDelta`, `nyaaUrls`, `nyaaCategory`, `nfoEnabled`, `automationEnabled`, `encodeEnabled` |
 | `ANIMARR_SECRET_KEY` | empty | no | Key for secrets saved in the UI. See [Secrets](#secrets) |
 
 Example file:
@@ -144,6 +147,14 @@ Jellyfin metadata:
 
 Search, ignore, unignore, and re-download are on the show page. Search can add a show that is not on the AniList user list. Those rows are monitored.
 
+## Encode
+
+`ENCODE_ENABLED` is off by default. While it is off, nothing is queued and the encode API claims no jobs. When it is on, a finished import is queued after the file is in the library. The container does not run ffmpeg.
+
+A second copy of this binary on the Mac claims one job at a time, encodes it with `hevc_videotoolbox` (or libx265), and replaces the file only after ffprobe checks the result. The Encode page shows running percent, fps, and speed. Setup, the launchd agent, and the path map are in [docs/encoding.md](docs/encoding.md).
+
+The worker should use `http://127.0.0.1:8990`. This compose file cannot publish that port (`network_mode: container:vpn`). The homelab vpn service already publishes `127.0.0.1:8990:8990`.
+
 ## Networking
 
 animarr is intended to share the vpn container with Sonarr, Prowlarr, Whisparr, and qBittorrent.
@@ -156,18 +167,15 @@ animarr is intended to share the vpn container with Sonarr, Prowlarr, Whisparr, 
 
 The image runs as uid 1000, matching the sonarr stack `PUID`, so hardlinked files stay readable.
 
-Caddy proxies `animarr.$BASE_DOMAIN` to `animarr:8990`. Two edits are documented and not applied in `vpn/docker-compose.yml`:
-
-- Add `animarr` to `networks.homelab_proxy.aliases` on the vpn service. Without it, Caddy cannot resolve the name.
-- Optionally add `8990:8990` on the vpn service if you want the UI on the host without Caddy.
+Caddy proxies `animarr.$BASE_DOMAIN` to `animarr:8990`. On this homelab that host is `animarr.home.mizustack.com`. The vpn service aliases `animarr` on `homelab_proxy`, which is what makes that name resolve, and it publishes `127.0.0.1:8990:8990` for the Mac. animarr's own compose file cannot publish the port. The encode API has no login, so the worker uses the loopback URL rather than the Caddy host. See [docs/encoding.md](docs/encoding.md).
 
 Recreating the vpn container orphans every container that shares its network. Recreate those stacks afterwards.
 
 ## Layout
 
-`cmd/animarr` is the binary. `internal/` holds AniList, the indexer interface, Nyaa, the release parser, matcher, scorer, qBittorrent, Jellyfin, the importer, NFO writer, franchise layout, SQLite, settings, the secret box, the pipeline, the scheduler, and the UI. Nyaa is the indexer. Score weights live in `internal/tuning` so the config loader does not import the scorer.
+`cmd/animarr` is the binary. `internal/` holds AniList, the indexer interface, Nyaa, the release parser, matcher, scorer, qBittorrent, Jellyfin, the importer, NFO writer, franchise layout, the encode worker, SQLite, settings, the secret box, the pipeline, the scheduler, and the UI. Nyaa is the indexer. Score weights live in `internal/tuning` so the config loader does not import the scorer.
 
-SQLite uses `modernc.org/sqlite` (pure Go, `CGO_ENABLED=0`). Queries are generated with [sqlc](https://sqlc.dev) into `internal/store/db`. The schema is the numbered files in `sql/schema` (goose-style `-- +goose Up` sections). `sql/queries` holds the query files. `make generate` runs `sqlc generate`. The Docker image builds the committed Go and does not need sqlc. On startup the process applies any migration that is not yet in `schema_migrations`. `0001` matches the original tables, so a database created before sqlc opens and then gains the franchise columns from `0002` and the `settings` table from `0003`.
+SQLite uses `modernc.org/sqlite` (pure Go, `CGO_ENABLED=0`). Queries are generated with [sqlc](https://sqlc.dev) into `internal/store/db`. The schema is the numbered files in `sql/schema` (goose-style `-- +goose Up` sections). `sql/queries` holds the query files. `make generate` runs `sqlc generate`. The Docker image builds the committed Go and does not need sqlc. On startup the process applies any migration that is not yet in `schema_migrations`. `0001` matches the original tables, so a database created before sqlc opens and then gains the franchise columns from `0002`, the `settings` table from `0003`, and the `encodes` table from `0004`.
 
 ```bash
 make generate   # requires sqlc on PATH
@@ -186,3 +194,4 @@ make check      # CGO_ENABLED=0 go vet and go test
 - Nyaa is the only indexer that searches. Mirrors are fallbacks for the same RSS API, not a different index.
 - Live qBittorrent, Jellyfin, and Nyaa were not called from this repo's tests. Those clients are covered with `httptest`. The Settings page is covered the same way, not in a browser. The score step between groups is a code default and is not on the form.
 - A settings row whose key is no longer known is ignored at startup. Old `SONARR_URL` and `SONARR_API_KEY` rows can stay in the database.
+- Encoding is off until `ENCODE_ENABLED` is turned on. The container queues files. The Mac worker does the encode. A finished encode does not keep the original file. See [docs/encoding.md](docs/encoding.md).

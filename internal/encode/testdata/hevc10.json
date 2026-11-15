@@ -1,0 +1,12 @@
+{
+  "streams": [
+    {
+      "codec_type": "video",
+      "codec_name": "hevc",
+      "pix_fmt": "yuv420p10le",
+      "bits_per_raw_sample": "10"
+    },
+    {"codec_type": "audio", "codec_name": "aac"}
+  ],
+  "format": {"duration": "1440.50", "size": "800000000"}
+}
