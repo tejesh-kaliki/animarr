@@ -164,11 +164,11 @@ func TestCorruptKeyFileDoesNotReplaceIt(t *testing.T) {
 	if err != nil || string(left) != "nope" {
 		t.Fatalf("file changed: %q %v", left, err)
 	}
-	stored, err := NewBox(bytes32(3)).Encrypt("SONARR_API_KEY", "keep-me")
+	stored, err := NewBox(bytes32(3)).Encrypt("JELLYFIN_API_KEY", "keep-me")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := loaded.Box.Decrypt("SONARR_API_KEY", stored); err == nil {
+	if _, err := loaded.Box.Decrypt("JELLYFIN_API_KEY", stored); err == nil {
 		t.Fatal("ephemeral key should not open another key's ciphertext")
 	}
 }

@@ -7,39 +7,19 @@ import (
 	"time"
 
 	"animarr/internal/parser"
+	"animarr/internal/tuning"
 )
 
-// Config holds tunable weights. Zero values are not replaced; use DefaultConfig.
-type Config struct {
-	PreferredResolution string
-	HEVCBonus           int
-	DubPenalty          int
-	RepackBonus         int
-	MinSeeders          int
-	GroupOrder          []string
-	GroupStep           int
-}
+// Config is the weight set. It lives in tuning so config does not import score.
+type Config = tuning.Score
 
-// Upgrade decides when a grabbed file may be replaced.
-type Upgrade struct {
-	Enabled  bool
-	Repack   bool
-	Window   time.Duration
-	MinDelta int
-}
+// Upgrade is the replacement policy. It lives in tuning so config does not import score.
+type Upgrade = tuning.Upgrade
 
 // DefaultConfig matches the homelab defaults: 1080p, HEVC +10, dub penalty,
 // and the group order ToonsHub, Erai-raws, ASW, SubsPlease, Judas, DKB, EMBER.
 func DefaultConfig() Config {
-	return Config{
-		PreferredResolution: "1080p",
-		HEVCBonus:           10,
-		DubPenalty:          40,
-		RepackBonus:         15,
-		MinSeeders:          1,
-		GroupOrder:          []string{"ToonsHub", "Erai-raws", "ASW", "SubsPlease", "Judas", "DKB", "EMBER"},
-		GroupStep:           10,
-	}
+	return tuning.DefaultScore()
 }
 
 // Score returns a comparable total. ok is false when the release must be skipped.

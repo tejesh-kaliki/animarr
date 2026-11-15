@@ -20,7 +20,6 @@ import (
 	"animarr/internal/anilist"
 	"animarr/internal/config"
 	"animarr/internal/jellyfin"
-	"animarr/internal/migrate"
 	"animarr/internal/nyaa"
 	"animarr/internal/pipeline"
 	"animarr/internal/qbit"
@@ -48,8 +47,6 @@ func main() {
 	switch cmd {
 	case "serve":
 		err = serve(cfg, origin)
-	case "migrate-sonarr":
-		err = migrateCmd(cfg, origin, args)
 	case "organize":
 		err = organizeCmd(cfg, origin, args)
 	case "rotate-key":
@@ -74,7 +71,7 @@ func usage() {
 
 Usage:
   animarr [serve]
-  animarr migrate-sonarr [--dry-run] [--relayout] [--overrides file]
+  animarr organize [--dry-run]
   animarr rotate-key [--old material] [--new material] [--write-file auto|true|false]
   animarr health
 
@@ -109,44 +106,6 @@ func serve(cfg config.Config, origin map[string]config.Source) error {
 	go sched.Run(ctx)
 	slog.Info("listening", "addr", cfg.ListenAddr, "db", cfg.DBPath())
 	return srv.Run(ctx, cfg.ListenAddr)
-}
-
-func migrateCmd(cfg config.Config, origin map[string]config.Source, args []string) error {
-	fs := flag.NewFlagSet("migrate-sonarr", flag.ContinueOnError)
-	fs.SetOutput(os.Stderr)
-	dry := fs.Bool("dry-run", false, "print the plan without writing the database")
-	relayout := fs.Bool("relayout", false, "rename recorded files into franchise season folders")
-	overrides := fs.String("overrides", "", "JSON map of Sonarr title to an AniList id or an entries chain")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	st, prov, err := openSettings(cfg, origin)
-	if err != nil {
-		return err
-	}
-	defer st.Close()
-	cur, err := prov.Current(context.Background())
-	if err != nil {
-		slog.Warn("settings", "err", err)
-	}
-	cur.ListenAddr = cfg.ListenAddr
-	cur.DataPath = cfg.DataPath
-	cur.LogLevel = cfg.LogLevel
-	pipe := newPipe(cur, st)
-	pipe.Settings = prov
-	_, err = (&migrate.Runner{
-		Config:    cur,
-		Store:     st,
-		AniList:   pipe.AniList,
-		Pipe:      pipe,
-		Sonarr:    migrate.NewSonarr(cur.SonarrURL, cur.SonarrAPIKey),
-		Jellyfin:  pipe.Jellyfin,
-		DryRun:    *dry,
-		Relayout:  *relayout,
-		Overrides: *overrides,
-		Out:       os.Stdout,
-	}).Run(context.Background())
-	return err
 }
 
 func rotateCmd(cfg config.Config, args []string) error {

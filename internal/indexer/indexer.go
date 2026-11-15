@@ -1,16 +1,11 @@
 // Package indexer is the search boundary. Nyaa implements it.
-// AnimeTosho and Torznab are stubs so a later client can satisfy the same interface.
 package indexer
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"time"
 )
-
-// ErrNotImplemented is returned by indexers that are only sketched.
-var ErrNotImplemented = errors.New("indexer not implemented")
 
 // Release is one torrent result. InfoHash is lowercase hex when known.
 type Release struct {
@@ -61,38 +56,4 @@ func Dedupe(lists ...[]Release) []Release {
 		}
 	}
 	return out
-}
-
-// AnimeTosho will query animetosho.org. It is not implemented.
-type AnimeTosho struct{}
-
-func (AnimeTosho) Name() string { return "animetosho" }
-
-func (AnimeTosho) Search(context.Context, Query) ([]Release, error) {
-	return nil, ErrNotImplemented
-}
-
-func (AnimeTosho) Recent(context.Context, string) ([]Release, error) {
-	return nil, ErrNotImplemented
-}
-
-// Torznab will speak the Torznab API. BaseURL and APIKey are reserved for that client.
-type Torznab struct {
-	BaseURL string
-	APIKey  string
-}
-
-func (t Torznab) Name() string {
-	if t.BaseURL != "" {
-		return "torznab"
-	}
-	return "torznab"
-}
-
-func (Torznab) Search(context.Context, Query) ([]Release, error) {
-	return nil, ErrNotImplemented
-}
-
-func (Torznab) Recent(context.Context, string) ([]Release, error) {
-	return nil, ErrNotImplemented
 }

@@ -388,43 +388,6 @@ func (s *Service) PromoteAired(ctx context.Context) error {
 	return err
 }
 
-// TestQbit checks the download client.
-func (s *Service) TestQbit(ctx context.Context) (string, error) {
-	if s.Settings != nil {
-		return CheckQbit(ctx, s.live(ctx))
-	}
-	if s.Qbit == nil {
-		return "", fmt.Errorf("qBittorrent is not configured")
-	}
-	return s.Qbit.Test(ctx)
-}
-
-// TestJellyfin checks the media server.
-func (s *Service) TestJellyfin(ctx context.Context) (string, error) {
-	if s.Settings != nil {
-		return CheckJellyfin(ctx, s.live(ctx))
-	}
-	if s.Jellyfin == nil || !s.Jellyfin.Enabled() {
-		return "", fmt.Errorf("Jellyfin is not configured")
-	}
-	return s.Jellyfin.Test(ctx)
-}
-
-// TestNyaa reads one recent page.
-func (s *Service) TestNyaa(ctx context.Context) (string, error) {
-	if s.Settings != nil {
-		return CheckNyaa(ctx, s.live(ctx))
-	}
-	if s.Indexer == nil {
-		return "", fmt.Errorf("no indexer configured")
-	}
-	rels, err := s.Indexer.Recent(ctx, s.Config.NyaaCategory)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%d recent releases", len(rels)), nil
-}
-
 // CheckQbit tests the qBittorrent values in cfg, including ones not saved yet.
 func CheckQbit(ctx context.Context, cfg config.Config) (string, error) {
 	if strings.TrimSpace(cfg.QBURL) == "" {

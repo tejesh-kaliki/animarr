@@ -175,7 +175,7 @@ func TestRotateRewritesSecretsAndRollsBack(t *testing.T) {
 	ctx := context.Background()
 	if err := prov.Save(ctx, url.Values{
 		config.KeyJellyfinAPIKey: {"jf-one"},
-		config.KeySonarrAPIKey:   {"sonarr-one"},
+		config.KeyQBPassword:     {"qb-one"},
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +185,7 @@ func TestRotateRewritesSecretsAndRollsBack(t *testing.T) {
 	if err != nil || n != 2 {
 		t.Fatalf("rotate %d %v", n, err)
 	}
-	for _, key := range []string{config.KeyJellyfinAPIKey, config.KeySonarrAPIKey} {
+	for _, key := range []string{config.KeyJellyfinAPIKey, config.KeyQBPassword} {
 		row, err := st.GetSetting(ctx, key)
 		if err != nil {
 			t.Fatal(err)
@@ -217,6 +217,34 @@ func TestRotateRewritesSecretsAndRollsBack(t *testing.T) {
 	}
 	if _, err := newBox.Decrypt(config.KeyJellyfinAPIKey, row.Value); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestUnknownSavedKeyIsIgnored(t *testing.T) {
+	st, prov := newProv(t, nil)
+	ctx := context.Background()
+	if err := st.UpsertSetting(ctx, store.Setting{
+		Key: "SONARR_URL", Value: "http://127.0.0.1:8989", UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertSetting(ctx, store.Setting{
+		Key: "SONARR_API_KEY", Value: "ciphertext", Secret: true, UpdatedAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := prov.Current(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.AniListUsername != "from-env" || cfg.LibraryDir != "/library" {
+		t.Fatalf("unknown rows changed config: %+v", cfg)
+	}
+	page := prov.Page(ctx)
+	for _, p := range page.Problems {
+		if strings.Contains(p, "SONARR") {
+			t.Fatalf("unknown key surfaced: %s", p)
+		}
 	}
 }
 

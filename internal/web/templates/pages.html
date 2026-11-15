@@ -390,7 +390,7 @@ document.body.addEventListener("htmx:afterRequest", function (e) {
 <div class="settings-layout">
   <nav class="filters settings-nav" aria-label="Settings sections">
     {{range .Settings.Groups}}
-    <a href="#g-{{lower .Name}}">{{if eq .Name "Sonarr"}}Sonarr migration{{else}}{{.Name}}{{end}}</a>
+    <a href="#g-{{lower .Name}}">{{.Name}}</a>
     {{end}}
     <a href="#g-startup">Startup</a>
   </nav>
@@ -399,7 +399,7 @@ document.body.addEventListener("htmx:afterRequest", function (e) {
     <select id="settings-jump" class="w-select" aria-label="Jump to section" onchange="if (this.value) location.hash = this.value">
       <option value="">Jump to section</option>
       {{range .Settings.Groups}}
-      <option value="#g-{{lower .Name}}">{{if eq .Name "Sonarr"}}Sonarr migration{{else}}{{.Name}}{{end}}</option>
+      <option value="#g-{{lower .Name}}">{{.Name}}</option>
       {{end}}
       <option value="#g-startup">Startup</option>
     </select>
@@ -429,12 +429,6 @@ document.body.addEventListener("htmx:afterRequest", function (e) {
       </div>
       {{end}}{{end}}{{end}}
       {{range .Settings.Groups}}{{if ne .Name "Automation"}}
-      {{if eq .Name "Sonarr"}}
-      <details class="settings-group" id="g-sonarr">
-        <summary>Sonarr migration</summary>
-        {{range .Fields}}{{template "settings-field" .}}{{end}}
-      </details>
-      {{else}}
       <section class="settings-group" id="g-{{lower .Name}}">
         <div class="group-head">
           <h2 id="g-{{lower .Name}}-title">{{.Name}}</h2>
@@ -445,7 +439,6 @@ document.body.addEventListener("htmx:afterRequest", function (e) {
         {{if .Test}}<div id="test-{{.Test}}" class="test-out" role="status" aria-live="polite">{{if eq $.TestName .Test}}{{template "test-out" $}}{{end}}</div>{{end}}
         {{range .Fields}}{{template "settings-field" .}}{{end}}
       </section>
-      {{end}}
       {{end}}{{end}}
       <div class="savebar">
         <span class="dirty-note" hidden>Unsaved changes</span>

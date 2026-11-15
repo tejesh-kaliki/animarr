@@ -146,7 +146,7 @@ func TestPagesAndActions(t *testing.T) {
 	if strings.Contains(settings, "Save empty") || strings.Contains(settings, ">Reset<") || strings.Contains(settings, "Clear it") || strings.Contains(settings, "Revert to") {
 		t.Fatalf("settings still has the old reset row: %s", settings)
 	}
-	for _, want := range []string{`id="g-automation"`, `class="savebar"`, `Test connection`, `hx-target="#test-qbit"`, `Sonarr migration`, `name="SCORE_GROUP_ORDER"`, `rows="2"`, `placeholder="Enter a new value"`, `aria-label="Jump to section"`, `value="#g-startup"`} {
+	for _, want := range []string{`id="g-automation"`, `class="savebar"`, `Test connection`, `hx-target="#test-qbit"`, `name="SCORE_GROUP_ORDER"`, `rows="2"`, `placeholder="Enter a new value"`, `aria-label="Jump to section"`, `value="#g-startup"`} {
 		if !strings.Contains(settings, want) {
 			t.Fatalf("settings missing %s", want)
 		}

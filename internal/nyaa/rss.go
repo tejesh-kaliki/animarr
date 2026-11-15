@@ -11,8 +11,6 @@ import (
 	"animarr/internal/indexer"
 )
 
-const nyaaNS = "https://nyaa.si/xmlns/nyaa"
-
 type rssFeed struct {
 	Channel struct {
 		Items []rssItem `xml:"item"`

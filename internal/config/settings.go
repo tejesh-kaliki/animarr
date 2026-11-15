@@ -69,8 +69,6 @@ const (
 	KeyBacklogPerPoll      = "BACKLOG_PER_POLL"
 	KeyNFOEnabled          = "NFO_ENABLED"
 	KeyAutomationEnabled   = "AUTOMATION_ENABLED"
-	KeySonarrURL           = "SONARR_URL"
-	KeySonarrAPIKey        = "SONARR_API_KEY"
 )
 
 // Spec describes one UI-editable setting.
@@ -219,8 +217,6 @@ func Format(cfg Config, key string) string {
 		return strconv.FormatBool(cfg.NFOEnabled)
 	case KeyAutomationEnabled:
 		return strconv.FormatBool(cfg.AutomationEnabled)
-	case KeySonarrURL:
-		return cfg.SonarrURL
 	default:
 		return ""
 	}
@@ -235,8 +231,6 @@ func SecretValue(cfg Config, key string) string {
 		return cfg.QBPassword
 	case KeyJellyfinAPIKey:
 		return cfg.JellyfinAPIKey
-	case KeySonarrAPIKey:
-		return cfg.SonarrAPIKey
 	default:
 		return ""
 	}
@@ -249,7 +243,7 @@ func SecretSet(cfg Config, key string) bool {
 
 // SecretValues lists effective secrets so errors can be redacted.
 func SecretValues(cfg Config) []string {
-	return []string{cfg.AniListToken, cfg.QBPassword, cfg.JellyfinAPIKey, cfg.SonarrAPIKey}
+	return []string{cfg.AniListToken, cfg.QBPassword, cfg.JellyfinAPIKey}
 }
 
 func validate(spec Spec, value string) error {
@@ -486,10 +480,6 @@ func applyValue(cfg *Config, spec Spec, value string) error {
 	case KeyAutomationEnabled:
 		b, _ := parseBool(value)
 		cfg.AutomationEnabled = b
-	case KeySonarrURL:
-		cfg.SonarrURL = strings.TrimRight(value, "/")
-	case KeySonarrAPIKey:
-		cfg.SonarrAPIKey = value
 	default:
 		return fmt.Errorf("unknown setting %s", spec.Key)
 	}
@@ -553,7 +543,4 @@ var specs = []Spec{
 	{Key: KeyRSSWindow, Label: "RSS window", Help: "Episodes aired inside this window are left to the RSS poll. 0 searches them as backlog.", Group: "Scheduler", Kind: KindDuration},
 	{Key: KeySearchBackoff, Label: "Search backoff", Help: "Minimum gap between backlog searches of one episode.", Group: "Scheduler", Kind: KindDuration},
 	{Key: KeyBacklogPerPoll, Label: "Backlog per poll", Group: "Scheduler", Kind: KindInt, Min: 0, MinSet: true},
-
-	{Key: KeySonarrURL, Label: "URL", Help: "Used only by migrate-sonarr. Empty is allowed.", Group: "Sonarr", Kind: KindURL, AllowEmpty: true},
-	{Key: KeySonarrAPIKey, Label: "API key", Help: "Leave blank to keep the current key. Stored encrypted.", Group: "Sonarr", Kind: KindSecret, AllowEmpty: true},
 }

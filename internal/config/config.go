@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"animarr/internal/score"
+	"animarr/internal/tuning"
 )
 
 // Config is the process configuration.
@@ -37,11 +37,9 @@ type Config struct {
 	SearchBackoff     time.Duration
 	RequestInterval   time.Duration
 	BacklogPerPoll    int
-	Score             score.Config
-	Upgrade           score.Upgrade
+	Score             tuning.Score
+	Upgrade           tuning.Upgrade
 	MatchThreshold    float64
-	SonarrURL         string
-	SonarrAPIKey      string
 	NFOEnabled        bool
 	AutomationEnabled bool
 	LogLevel          string
@@ -83,8 +81,6 @@ type Public struct {
 	UpgradeRepack     bool
 	UpgradeWindow     string
 	UpgradeMinDelta   int
-	SonarrURL         string
-	SonarrKeySet      bool
 	NFOEnabled        bool
 	AutomationEnabled bool
 	LogLevel          string
@@ -148,8 +144,6 @@ func (c Config) Public() Public {
 		UpgradeRepack:     c.Upgrade.Repack,
 		UpgradeWindow:     c.Upgrade.Window.String(),
 		UpgradeMinDelta:   c.Upgrade.MinDelta,
-		SonarrURL:         c.SonarrURL,
-		SonarrKeySet:      c.SonarrAPIKey != "",
 		NFOEnabled:        c.NFOEnabled,
 		AutomationEnabled: c.AutomationEnabled,
 		LogLevel:          c.LogLevel,
@@ -206,30 +200,25 @@ func LoadBase() (Config, map[string]Source, error) {
 
 func defaults() Config {
 	return Config{
-		ListenAddr:      ":8990",
-		DataPath:        "/config",
-		LibraryDir:      "/data/media/anime",
-		DownloadsDir:    "/data/downloads",
-		NyaaURLs:        []string{"https://nyaa.si"},
-		NyaaCategory:    "1_2",
-		UserAgent:       "animarr/0.1 (+homelab; anime tracker)",
-		QBURL:           "http://127.0.0.1:8080",
-		QBCategory:      "animarr",
-		JellyfinURL:     "http://jellyfin:8096",
-		SyncInterval:    30 * time.Minute,
-		RSSInterval:     15 * time.Minute,
-		QBPollInterval:  time.Minute,
-		RSSWindow:       6 * time.Hour,
-		SearchBackoff:   6 * time.Hour,
-		RequestInterval: 2 * time.Second,
-		BacklogPerPoll:  3,
-		Score:           score.DefaultConfig(),
-		Upgrade: score.Upgrade{
-			Enabled:  false,
-			Repack:   true,
-			Window:   72 * time.Hour,
-			MinDelta: 15,
-		},
+		ListenAddr:        ":8990",
+		DataPath:          "/config",
+		LibraryDir:        "/data/media/anime",
+		DownloadsDir:      "/data/downloads",
+		NyaaURLs:          []string{"https://nyaa.si"},
+		NyaaCategory:      "1_2",
+		UserAgent:         "animarr/0.1 (+homelab; anime tracker)",
+		QBURL:             "http://127.0.0.1:8080",
+		QBCategory:        "animarr",
+		JellyfinURL:       "http://jellyfin:8096",
+		SyncInterval:      30 * time.Minute,
+		RSSInterval:       15 * time.Minute,
+		QBPollInterval:    time.Minute,
+		RSSWindow:         6 * time.Hour,
+		SearchBackoff:     6 * time.Hour,
+		RequestInterval:   2 * time.Second,
+		BacklogPerPoll:    3,
+		Score:             tuning.DefaultScore(),
+		Upgrade:           tuning.DefaultUpgrade(),
 		MatchThreshold:    0.82,
 		NFOEnabled:        true,
 		AutomationEnabled: false,
@@ -435,14 +424,6 @@ func applyEnv(cfg *Config) []string {
 	}
 	if setInt(&cfg.Upgrade.MinDelta, "UPGRADE_MIN_DELTA") {
 		mark(KeyUpgradeMinDelta)
-	}
-	if v, ok := lookup("SONARR_URL"); ok {
-		cfg.SonarrURL = strings.TrimRight(v, "/")
-		mark(KeySonarrURL)
-	}
-	if v, ok := os.LookupEnv("SONARR_API_KEY"); ok {
-		cfg.SonarrAPIKey = v
-		mark(KeySonarrAPIKey)
 	}
 	if v, ok := lookup("LOG_LEVEL"); ok {
 		cfg.LogLevel = strings.ToLower(v)

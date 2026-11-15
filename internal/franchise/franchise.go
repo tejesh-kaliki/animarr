@@ -49,7 +49,7 @@ type edge struct{ from, to int }
 // Place assigns franchise ids and season numbers.
 // A single SEQUEL/PREQUEL path keeps relation order. A branch or a cycle falls
 // back to start year, then the AniList season name, then id. That fallback only
-// numbers folders. Sonarr file mapping does not use it.
+// numbers folders.
 func Place(shows []Show) map[int]Placement {
 	byID := make(map[int]Show, len(shows))
 	for _, sh := range shows {
