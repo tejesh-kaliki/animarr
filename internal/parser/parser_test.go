@@ -221,3 +221,22 @@ func TestHashIsNotEpisode(t *testing.T) {
 		t.Fatal("hash looked like a batch")
 	}
 }
+
+func TestPartNumberIsNotARange(t *testing.T) {
+	for _, in := range []string{
+		"[Erai-raws] Chitose-kun wa Ramune Bin no Naka Part 2 - 06 [1080p CR WEBRip HEVC AAC][MultiSub][EB90CEBA]",
+		"[Group] Chitose-kun wa Ramune Bin no Naka Season 2 - 06 (1080p)",
+	} {
+		p := Parse(in)
+		if p.Batch || p.Episode != 6 || p.EpisodeEnd != 0 {
+			t.Fatalf("%q: %+v", in, p)
+		}
+		if p.Title != "Chitose-kun wa Ramune Bin no Naka Part 2" && p.Title != "Chitose-kun wa Ramune Bin no Naka Season 2" {
+			t.Fatalf("%q: title %q", in, p.Title)
+		}
+	}
+	// A real range after a part number is still a batch.
+	if p := Parse("[Group] Title Part 2 - 01-12 (1080p)"); !p.Batch {
+		t.Fatalf("%+v", p)
+	}
+}

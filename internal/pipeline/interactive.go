@@ -8,7 +8,6 @@ import (
 
 	"animarr/internal/config"
 	"animarr/internal/indexer"
-	"animarr/internal/match"
 	"animarr/internal/parser"
 	"animarr/internal/score"
 	"animarr/internal/store"
@@ -47,7 +46,7 @@ func (s *Service) ListChoices(ctx context.Context, showID int64, episode int) ([
 	if err != nil {
 		return nil, err
 	}
-	return rankChoices(cfg, sh, episode, rels), nil
+	return rankChoices(cfg, sh, episode, rels, s.numberingFor(ctx, sh)), nil
 }
 
 // GrabChoice sends one release from the interactive list to qBittorrent.
@@ -89,31 +88,36 @@ func (s *Service) GrabChoice(ctx context.Context, showID int64, episode int, inf
 	}
 	parsed := parser.Parse(found.Title)
 	rep := score.Explain(parsed, found.Seeders, sh.PreferredResolution, cfg.Score)
-	eps, err := s.episodesForGrab(ctx, sh, episode, parsed)
+	eps, err := s.episodesForGrab(ctx, sh, episode, parsed, s.numberingFor(ctx, sh))
 	if err != nil {
 		return err
 	}
 	return s.grabEpisodes(ctx, cfg, sh, eps, picked{rel: *found, parsed: parsed, score: rep.Total}, true, true)
 }
 
-func (s *Service) episodesForGrab(ctx context.Context, sh store.Show, chosen int, p parser.Parsed) ([]store.Episode, error) {
+func (s *Service) episodesForGrab(ctx context.Context, sh store.Show, chosen int, p parser.Parsed, nb numbering) ([]store.Episode, error) {
 	nums := map[int]struct{}{}
 	if chosen > 0 {
 		nums[chosen] = struct{}{}
 	}
 	if p.Batch && p.Episode > 0 && p.EpisodeEnd >= p.Episode {
+		// A pack counted on from earlier seasons maps back to this season's numbers.
+		shift := 0
+		if nb.offset > 0 && p.Episode > nb.offset {
+			shift = nb.offset
+		}
 		end := p.EpisodeEnd
 		if end > p.Episode+200 {
 			end = p.Episode + 200
 		}
 		for n := p.Episode; n <= end; n++ {
-			nums[n] = struct{}{}
+			nums[n-shift] = struct{}{}
 		}
 	} else if chosen == 0 {
 		if strings.EqualFold(sh.Format, "MOVIE") {
 			nums[1] = struct{}{}
-		} else if p.Episode > 0 {
-			nums[p.Episode] = struct{}{}
+		} else if local, _, ok := nb.local(sh, p.Episode); ok {
+			nums[local] = struct{}{}
 		}
 	}
 	if len(nums) == 0 {
@@ -144,8 +148,7 @@ func (s *Service) episodesForGrab(ctx context.Context, sh store.Show, chosen int
 	return eps, nil
 }
 
-func rankChoices(cfg config.Config, sh store.Show, episode int, rels []indexer.Release) []Choice {
-	cands := []match.Candidate{{Key: sh.ID, Titles: sh.AllTitles()}}
+func rankChoices(cfg config.Config, sh store.Show, episode int, rels []indexer.Release, nb numbering) []Choice {
 	out := make([]Choice, 0, len(rels))
 	for _, rel := range rels {
 		p := parser.Parse(rel.Title)
@@ -157,10 +160,10 @@ func rankChoices(cfg config.Config, sh store.Show, episode int, rels []indexer.R
 			Reasons: append([]string(nil), rep.Lines...),
 		}
 		var why []string
-		if _, _, ok := match.Best(p.Title, cands, cfg.MatchThreshold); !ok {
+		if !nb.titleOK(p, sh, cfg.MatchThreshold) {
 			why = append(why, "title did not match")
 		}
-		if episode > 0 && !coversEpisode(sh, p, episode) {
+		if episode > 0 && !nb.coversEpisode(sh, p, episode) {
 			why = append(why, episodeReject(p, episode))
 		}
 		if p.Batch {
@@ -185,19 +188,6 @@ func rankChoices(cfg config.Config, sh store.Show, episode int, rels []indexer.R
 		return strings.Compare(a.Release.Title, b.Release.Title)
 	})
 	return out
-}
-
-func coversEpisode(sh store.Show, p parser.Parsed, episode int) bool {
-	if strings.EqualFold(sh.Format, "MOVIE") {
-		if p.Batch {
-			return spanCovers(p, episode)
-		}
-		return p.Episode == 0 || p.Episode == episode
-	}
-	if p.Batch {
-		return spanCovers(p, episode)
-	}
-	return p.Episode == episode
 }
 
 func spanCovers(p parser.Parsed, episode int) bool {

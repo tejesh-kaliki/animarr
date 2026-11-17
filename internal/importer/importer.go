@@ -118,8 +118,9 @@ func Sanitize(name string) string {
 }
 
 // PickVideo chooses the episode file from a multi-file torrent.
-// Sample files are ignored. A name that parses to the episode wins; otherwise the largest video.
-func PickVideo(files []File, episode int) (File, bool) {
+// Sample files are ignored. A name that parses to one of the episodes wins, tried in order
+// (a caller passes the absolute number before the season-relative one); otherwise the largest video.
+func PickVideo(files []File, episodes ...int) (File, bool) {
 	var videos []File
 	for _, f := range files {
 		base := filepath.Base(f.Name)
@@ -138,7 +139,10 @@ func PickVideo(files []File, episode int) (File, bool) {
 	if len(videos) == 1 {
 		return videos[0], true
 	}
-	if episode > 0 {
+	for _, episode := range episodes {
+		if episode <= 0 {
+			continue
+		}
 		for _, f := range videos {
 			p := parser.Parse(filepath.Base(f.Name))
 			if !p.Batch && p.Episode == episode {
