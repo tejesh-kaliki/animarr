@@ -278,7 +278,7 @@ func (s *Service) PollRSS(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	shows, err := s.Store.ListShows(ctx, "monitored")
+	shows, err := s.Store.ListShows(ctx, "all")
 	if err != nil {
 		return err
 	}
@@ -307,8 +307,15 @@ func (s *Service) PollRSS(ctx context.Context) error {
 		n := p.Episode
 		if strings.EqualFold(sh.Format, "MOVIE") && (n == 0 || n == 1) {
 			n = 1
+		} else if n > 0 {
+			// A release may count on from earlier seasons: "19" is E06 of a 2nd cour.
+			target, local, ok := resolveHit(sh, n, shows)
+			if !ok {
+				continue
+			}
+			sh, n = target, local
 		}
-		if n <= 0 {
+		if n <= 0 || !sh.Monitored {
 			continue
 		}
 		k := epKey{sh.ID, n}
@@ -490,6 +497,12 @@ func (s *Service) searchTitles(ctx context.Context, cfg config.Config, sh store.
 	if len(texts) == 0 {
 		add(sh.TitleNative)
 	}
+	// Releases that count on from earlier seasons carry the series title.
+	for _, t := range s.numberingFor(ctx, sh).prior {
+		if isLatin(t) {
+			add(t)
+		}
+	}
 	var lists [][]indexer.Release
 	for _, text := range texts {
 		rels, err := s.Indexer.Search(ctx, indexer.Query{Text: text, Category: cfg.NyaaCategory})
@@ -502,7 +515,7 @@ func (s *Service) searchTitles(ctx context.Context, cfg config.Config, sh store.
 }
 
 func (s *Service) consider(ctx context.Context, cfg config.Config, sh store.Show, ep store.Episode, rels []indexer.Release, force, manual bool) error {
-	best, ok := s.pick(cfg, sh, ep, rels)
+	best, ok := s.pick(cfg, sh, ep, rels, s.numberingFor(ctx, sh))
 	if !ok {
 		if force {
 			return ErrNoRelease
@@ -512,10 +525,9 @@ func (s *Service) consider(ctx context.Context, cfg config.Config, sh store.Show
 	return s.grabEpisodes(ctx, cfg, sh, []store.Episode{ep}, best, force, manual)
 }
 
-func (s *Service) pick(cfg config.Config, sh store.Show, ep store.Episode, rels []indexer.Release) (picked, bool) {
+func (s *Service) pick(cfg config.Config, sh store.Show, ep store.Episode, rels []indexer.Release, nb numbering) (picked, bool) {
 	var best picked
 	found := false
-	cands := []match.Candidate{{Key: sh.ID, Titles: sh.AllTitles()}}
 	for _, rel := range rels {
 		p := parser.Parse(rel.Title)
 		if p.Batch {
@@ -525,10 +537,10 @@ func (s *Service) pick(cfg config.Config, sh store.Show, ep store.Episode, rels 
 			if p.Episode != 0 && p.Episode != ep.Number {
 				continue
 			}
-		} else if p.Episode != ep.Number {
+		} else if local, _, ok := nb.local(sh, p.Episode); !ok || local != ep.Number {
 			continue
 		}
-		if _, _, ok := match.Best(p.Title, cands, cfg.MatchThreshold); !ok {
+		if !nb.titleOK(p, sh, cfg.MatchThreshold) {
 			continue
 		}
 		total, ok := score.Score(p, rel.Seeders, sh.PreferredResolution, cfg.Score)
@@ -696,7 +708,16 @@ func (s *Service) importCompleted(ctx context.Context, cfg config.Config, d stor
 	for _, f := range files {
 		pickedFiles = append(pickedFiles, importer.File{Name: f.Name, Size: f.Size})
 	}
-	video, ok := importer.PickVideo(pickedFiles, d.Episode)
+	sh, err := s.Store.GetShow(ctx, d.ShowID)
+	if err != nil {
+		return err
+	}
+	// Files in a pack may be named by absolute number; try that first.
+	wanted := []int{d.Episode}
+	if nb := s.numberingFor(ctx, sh); nb.offset > 0 {
+		wanted = []int{d.Episode + nb.offset, d.Episode}
+	}
+	video, ok := importer.PickVideo(pickedFiles, wanted...)
 	if !ok {
 		_ = s.Store.UpdateDownload(ctx, d.ID, store.DlError, 100, "no video file")
 		return s.failEpisode(ctx, d, "no video file in torrent")
@@ -706,10 +727,6 @@ func (s *Service) importCompleted(ctx context.Context, cfg config.Config, d stor
 		save = d.SavePath
 	}
 	src := filepath.Join(save, filepath.FromSlash(video.Name))
-	sh, err := s.Store.GetShow(ctx, d.ShowID)
-	if err != nil {
-		return err
-	}
 	dst, err := s.libraryDest(ctx, cfg, sh, d.Episode, filepath.Ext(video.Name))
 	if err != nil {
 		_ = s.Store.UpdateDownload(ctx, d.ID, store.DlError, 100, err.Error())
@@ -963,4 +980,14 @@ func (s *Service) writeNFO(ctx context.Context, sh store.Show, ep store.Episode,
 		slog.Warn("season poster", "show", sh.DisplayTitle(), "err", err)
 	}
 	return nfo.EnsurePoster(ctx, nil, seriesDir, root.CoverImage)
+}
+
+// isLatin reports a title searchable on Nyaa without a native script.
+func isLatin(t string) bool {
+	for _, r := range t {
+		if r > 0x24F {
+			return false
+		}
+	}
+	return strings.TrimSpace(t) != ""
 }

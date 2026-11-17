@@ -53,7 +53,18 @@ var (
 	reRepackWord   = regexp.MustCompile(`(?i)\b(?:repack|proper)\b`)
 	reRangeFirst   = regexp.MustCompile(`(?i)S(\d{1,2})E(\d{1,4})|(\d{1,4})`)
 	reSpace        = regexp.MustCompile(`\s+`)
+	// rePartNum finds "Part 2 - 06": the 2 names a cour, not the start of a range.
+	rePartNum = regexp.MustCompile(`(?i)\b((?:part|cour|vol(?:ume)?|season)\s*)(\d{1,2})(\s+-\s+\d)`)
 )
+
+// maskPartNumber hides the number in "Part 2 - 06" so range detection does not read
+// "2 - 06" as episodes 2 to 6. The result has the same length as s.
+func maskPartNumber(s string) string {
+	return rePartNum.ReplaceAllStringFunc(s, func(m string) string {
+		sm := rePartNum.FindStringSubmatch(m)
+		return sm[1] + strings.Repeat("X", len(sm[2])) + sm[3]
+	})
+}
 
 // Parse reads a release title. Version defaults to 1. Batch is true for ranges,
 // "Batch", and "Complete"; those releases are not grabbed.
@@ -61,7 +72,7 @@ func Parse(raw string) Parsed {
 	p := Parsed{Raw: strings.TrimSpace(raw), Version: 1}
 	s := p.Raw
 	s = reExt.ReplaceAllString(s, "")
-	if reBatchWord.MatchString(s) || reRange.MatchString(s) {
+	if reBatchWord.MatchString(s) || reRange.MatchString(maskPartNumber(s)) {
 		p.Batch = true
 	}
 	if m := reRes.FindString(s); m != "" {
@@ -103,7 +114,7 @@ func Parse(raw string) Parsed {
 	}
 	s = reHash.ReplaceAllString(s, " ")
 
-	if loc := reRange.FindStringIndex(s); loc != nil {
+	if loc := reRange.FindStringIndex(maskPartNumber(s)); loc != nil {
 		p.Batch = true
 		frag := s[loc[0]:loc[1]]
 		if !reSeasonWord.MatchString(frag) {
