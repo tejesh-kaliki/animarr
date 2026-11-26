@@ -30,6 +30,7 @@ var (
 	reExt          = regexp.MustCompile(`(?i)\.(?:mkv|mp4|avi|m4v)$`)
 	reBatchWord    = regexp.MustCompile(`(?i)\b(?:batch|complete)\b`)
 	reRange        = regexp.MustCompile(`(?i)(?:\bS\d{1,2}E\d{1,4}\s*[-~～]\s*E?\d{1,4}\b|\bE\d{1,4}\s*[-~～]\s*E\d{1,4}\b|(?:^|[\s\[\]\(\)._])\d{1,4}\s*[-~～]\s*\d{1,4}(?:$|[\s\[\]\(\)._])|\bseasons?\s*\d+\s*[-~～]\s*\d+\b)`)
+	reRangeMarked  = regexp.MustCompile(`(?i)[SE]\d|season`)
 	reSeasonWord   = regexp.MustCompile(`(?i)season`)
 	reEpSpan       = regexp.MustCompile(`(?i)S(\d{1,2})E(\d{1,4})\s*[-~～]\s*E?(\d{1,4})|E(\d{1,4})\s*[-~～]\s*E(\d{1,4})|(?:^|[\s\[\]\(\)._])(\d{1,4})\s*[-~～]\s*(\d{1,4})(?:$|[\s\[\]\(\)._])`)
 	reBracketGroup = regexp.MustCompile(`^\[([^\]]+)\]\s*`)
@@ -47,7 +48,7 @@ var (
 	reRepack       = regexp.MustCompile(`(?i)\b(?:repack|proper)\b`)
 	reBrackets     = regexp.MustCompile(`\[[^\]]*\]`)
 	reParens       = regexp.MustCompile(`\([^)]*\)`)
-	reTech         = regexp.MustCompile(`(?i)\b(?:2160p|1080p|720p|480p|360p|4k|x265|x264|h[\.\s]*265|h[\.\s]*264|hevc|avc|10\s*bit|8\s*bit|hdr10|hdr|web-?dl|webrip|bluray|bdrip|bdremux|remux|hdtv|aac\d*|flac|opus|ac3|eac3|ddp|multiple|subtitle|multi-?subs?|multisubs|bili|amzn|dsnp|10bit|8bit)\b`)
+	reTech         = regexp.MustCompile(`(?i)\b(?:2160p|1080p|720p|480p|360p|4k|x265|x264|h[\.\s]*265|h[\.\s]*264|hevc|avc|10\s*bit|8\s*bit|hdr10|hdr|web-?dl|webrip|bluray|bdrip|bdremux|remux|hdtv|aac\d*|flac|opus|ac3|eac3|ddp|multiple|subtitle|multi-?subs?|multisubs|bili|amzn|dsnp|nf|dual|10bit|8bit)\b`)
 	reYear         = regexp.MustCompile(`\b(?:19|20)\d{2}\b`)
 	reTrailGroup   = regexp.MustCompile(`(?i)\s*-\s*([A-Za-z][A-Za-z0-9]*)$`)
 	reRepackWord   = regexp.MustCompile(`(?i)\b(?:repack|proper)\b`)
@@ -72,7 +73,7 @@ func Parse(raw string) Parsed {
 	p := Parsed{Raw: strings.TrimSpace(raw), Version: 1}
 	s := p.Raw
 	s = reExt.ReplaceAllString(s, "")
-	if reBatchWord.MatchString(s) || reRange.MatchString(maskPartNumber(s)) {
+	if reBatchWord.MatchString(s) || findRange(s) != nil {
 		p.Batch = true
 	}
 	if m := reRes.FindString(s); m != "" {
@@ -114,7 +115,7 @@ func Parse(raw string) Parsed {
 	}
 	s = reHash.ReplaceAllString(s, " ")
 
-	if loc := reRange.FindStringIndex(maskPartNumber(s)); loc != nil {
+	if loc := findRange(s); loc != nil {
 		p.Batch = true
 		frag := s[loc[0]:loc[1]]
 		if !reSeasonWord.MatchString(frag) {
@@ -176,6 +177,20 @@ func Parse(raw string) Parsed {
 	}
 	p.Title = strings.Trim(reSpace.ReplaceAllString(s, " "), " -_.")
 	return p
+}
+
+// findRange locates a batch range. A bare "1-2" is ignored when the title also
+// carries a single SxxEyy marker, since it is then part of the show name ("Ranma 1-2").
+func findRange(s string) []int {
+	loc := reRange.FindStringIndex(maskPartNumber(s))
+	if loc == nil {
+		return nil
+	}
+	frag := s[loc[0]:loc[1]]
+	if !reRangeMarked.MatchString(frag) && reSxE.MatchString(s) {
+		return nil
+	}
+	return loc
 }
 
 func episodeSpan(frag string) (int, int, int, bool) {
