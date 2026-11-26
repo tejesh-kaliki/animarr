@@ -240,3 +240,10 @@ func TestPartNumberIsNotARange(t *testing.T) {
 		t.Fatalf("%+v", p)
 	}
 }
+
+func TestParseShowNameWithDigitRange(t *testing.T) {
+	p := Parse("[ToonsHub] Ranma 1-2 2024 S03E08 1080p NF WEB-DL DUAL AAC2.0 H.264 (Dual-Audio, Multi-Subs)")
+	if p.Batch || p.Season != 3 || p.Episode != 8 || p.Title != "Ranma 1-2" {
+		t.Fatalf("got batch=%v S%dE%d title=%q", p.Batch, p.Season, p.Episode, p.Title)
+	}
+}
