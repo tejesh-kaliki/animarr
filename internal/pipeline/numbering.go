@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"regexp"
 	"strings"
 
 	"animarr/internal/franchise"
@@ -97,7 +98,7 @@ func (nb numbering) local(sh store.Show, n int) (ep int, abs bool, ok bool) {
 // titleOK reports whether a parsed title belongs to the show. A release whose
 // number lies beyond the show's own count may use an earlier season's title.
 func (nb numbering) titleOK(p parser.Parsed, sh store.Show, threshold float64) bool {
-	cands := []match.Candidate{{Key: sh.ID, Titles: sh.AllTitles()}}
+	cands := []match.Candidate{{Key: sh.ID, Titles: titlesFor(sh, p.Season)}}
 	if _, _, ok := match.Best(p.Title, cands, threshold); ok {
 		return true
 	}
@@ -145,4 +146,32 @@ func (nb numbering) coversEpisode(sh store.Show, p parser.Parsed, episode int) b
 	}
 	local, _, ok := nb.local(sh, p.Episode)
 	return ok && local == episode
+}
+
+var (
+	reTitleYear   = regexp.MustCompile(`\s*\(\s*(?:19|20)\d{2}\s*\)`)
+	reTitleSeason = regexp.MustCompile(`(?i)\s*\b(?:(?:\d+(?:st|nd|rd|th)|second|third|final)\s+season|season\s+\d+|part\s+\d+)\b`)
+)
+
+// titlesFor lists the titles a release can match. Releases drop the year and
+// the season words that AniList puts in an entry's title ("Ranma 1/2 (2024) 3rd
+// Season" ships as "Ranma 1-2 S03E08"), so the bare title is offered too. It is
+// offered only when the release's season agrees, so sibling seasons of one
+// franchise stay distinct.
+func titlesFor(sh store.Show, season int) []string {
+	titles := sh.AllTitles()
+	if season > 0 && season != sh.SeasonNumber || season == 0 && sh.SeasonNumber > 1 {
+		return titles
+	}
+	out := append([]string(nil), titles...)
+	for _, t := range titles {
+		b := reTitleYear.ReplaceAllString(t, "")
+		if season > 0 {
+			b = reTitleSeason.ReplaceAllString(b, "")
+		}
+		if b = strings.TrimSpace(b); b != "" && b != t {
+			out = append(out, b)
+		}
+	}
+	return out
 }

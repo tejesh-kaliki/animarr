@@ -282,10 +282,8 @@ func (s *Service) PollRSS(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	cands := make([]match.Candidate, 0, len(shows))
 	byID := make(map[int64]store.Show, len(shows))
 	for _, sh := range shows {
-		cands = append(cands, match.Candidate{Key: sh.ID, Titles: sh.AllTitles()})
 		byID[sh.ID] = sh
 	}
 	type epKey struct {
@@ -298,6 +296,10 @@ func (s *Service) PollRSS(ctx context.Context) error {
 		p := parser.Parse(rel.Title)
 		if p.Batch || strings.TrimSpace(p.Title) == "" {
 			continue
+		}
+		cands := make([]match.Candidate, 0, len(shows))
+		for _, c := range shows {
+			cands = append(cands, match.Candidate{Key: c.ID, Titles: titlesFor(c, p.Season)})
 		}
 		hit, _, ok := match.Best(p.Title, cands, cfg.MatchThreshold)
 		if !ok {

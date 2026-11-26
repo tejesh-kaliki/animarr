@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"animarr/internal/indexer"
+	"animarr/internal/parser"
 	"animarr/internal/store"
 )
 
@@ -142,5 +143,17 @@ func TestSearchFindsAbsoluteRelease(t *testing.T) {
 	choices, err := svc.ListChoices(context.Background(), s2.ID, 6)
 	if err != nil || len(choices) != 1 || choices[0].Rejected {
 		t.Fatalf("choices: %+v %v", choices, err)
+	}
+}
+
+func TestTitleOKDropsYearAndSeasonWords(t *testing.T) {
+	s3 := store.Show{ID: 5, TitleRomaji: "Ranma 1/2 (2024) 3rd Season", TitleEnglish: "Ranma1/2 (2024) Season 3", SeasonNumber: 3}
+	s1 := store.Show{ID: 156, TitleRomaji: "Ranma 1/2 (2024)", TitleEnglish: "Ranma1/2 (2024)", SeasonNumber: 1}
+	p := parser.Parse("[ToonsHub] Ranma 1-2 2024 S03E08 1080p NF WEB-DL DUAL AAC2.0 H.264 (Dual-Audio, Multi-Subs)")
+	if !(numbering{}).titleOK(p, s3, 0.8) {
+		t.Fatalf("S03 release should match season 3 (title %q)", p.Title)
+	}
+	if (numbering{}).titleOK(p, s1, 0.8) {
+		t.Fatal("S03 release must not match season 1")
 	}
 }
